@@ -142,8 +142,8 @@ export default function Chat() {
                     <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div
                             className={`max-w-[90%] md:max-w-[70%] p-4 rounded-2xl ${msg.role === 'user'
-                                    ? 'bg-[#38bdf8] text-[#0f172a] rounded-br-sm'
-                                    : 'bg-[#1e293b] text-slate-200 border border-slate-800 rounded-bl-sm shadow-sm'
+                                ? 'bg-[#38bdf8] text-[#0f172a] rounded-br-sm'
+                                : 'bg-[#1e293b] text-slate-200 border border-slate-800 rounded-bl-sm shadow-sm'
                                 }`}
                         >
                             {msg.role === 'user' ? (
@@ -166,8 +166,8 @@ export default function Chat() {
 
             {/* Input fixo no rodapé baseado no v0 */}
             <div
-                className="border-t border-slate-800 bg-[#0f172a] px-4 pb-2 pt-3 shrink-0"
-                style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" }}
+                className="border-t border-slate-800 bg-[#0f172a] px-4 pt-3 shrink-0"
+                style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}
             >
                 {/* Campo de input */}
                 <div className="max-w-4xl mx-auto">
