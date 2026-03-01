@@ -1,0 +1,37 @@
+﻿Prompt de Contexto: Arquitetura de Sistema de Agentes Simbióticos1. Visão Geral do ProjetoO objetivo é construir um sistema de orquestração de agentes de IA simbiótico, focado em autonomia de aprendizado e resolução de problemas complexos. O sistema deve ser capaz de realizar pesquisas profundas, documentar novas habilidades (SOPs) e preparar estruturas de código para serem refinadas por modelos de ponta (Claude Sonnet/Gemini Pro).2. Pilares do SistemaSimbiose Humano-Máquina: O sistema não apenas executa, mas aprende com as preferências do usuário e proativamente sugere melhorias.Custo Zero (Open Source/Free Tiers): Utilização de Python, n8n (self-hosted), DuckDuckGo Search API e bancos de dados vetoriais locais (ChromaDB).Cérebro Híbrido: O processamento pesado de lógica e código é feito via chat web (modelos de ponta), enquanto a orquestração e pesquisa são autônomas e locais.3. Arquitetura de Agentes PropostaO sistema deve operar com os seguintes perfis especializados:AgenteFunção PrincipalFerramenta/RecursoInvestigadorPesquisa web autônoma e extração de dados técnicos.Playwright / DuckDuckGoArquitetoCriação de manuais (SOPs) e documentação de novas habilidades.Markdown / Memória LocalEngenheiro de PromptsPrepara o contexto otimizado para que o humano leve ao Claude/Gemini.Template EngineBibliotecárioGerencia o banco de dados vetorial de conhecimentos adquiridos.ChromaDB / SupabaseOtimizadorAnalisa falhas no fluxo e sugere novos agentes ou ferramentas.Reflexão de Sistema4. Exemplo de Workflow: Descoberta de Habilidade (Canal Dark)Input: "Quero criar um canal dark com automação n8n."Ação do Investigador: Mapeia ferramentas (n8n, ElevenLabs, Groq) e tendências.Ação do Arquiteto: Estrutura o passo a passo lógico e os requisitos de API.Ação do Bibliotecário: Armazena a "Habilidade: Automação de Vídeo" para uso futuro.Output para o Humano: Gera um resumo técnico e o código-base para ser validado nos modelos web de ponta.5. Próximos Passos de ImplementaçãoConfigurar o n8n localmente via Docker.Estabelecer a Memória de Longo Prazo usando ChromaDB para evitar redundância de pesquisa.Desenvolver o Agente de Pesquisa em Python para extrair documentações de APIs. FIM DA PRIMEIRA CONVERSA... # Projeto: Assistente Orgânico Multi-Agente (Jarvis/Moltbot)
+## Contexto: Evolução Autônoma "Apesar do Mobile"
+
+### 1. Visão Geral
+Criar um ecossistema de agentes de IA coordenados por um dispositivo Android (S21 Ultra) que gerencia execução em nuvem (Oracle Cloud) e inteligência via APIs externas. O sistema deve ser capaz de evoluir suas próprias funcionalidades sem intervenção técnica do usuário (Human-in-the-loop leigo).
+
+### 2. Infraestrutura de Hardware
+- **Cérebro/Comando:** Samsung Galaxy S21 Ultra (12GB RAM, Exynos).
+- **Ambiente Local:** Termux / Zeroclaw.
+- **Ambiente de Execução:** Oracle Cloud Instance (ARM, 1GB RAM, Ubuntu).
+- **Estratégia de Memória:** "Context Swap" (carregar um agente por vez para preservar RAM).
+
+### 3. Squad de Agentes (Hierarquia)
+| Agente | Modelo/API Sugerida | Função Principal |
+| :--- | :--- | :--- |
+| **Maestro** | Gemini 1.5 Flash (Google) | Orquestrador, memória de longo prazo (1M tokens) e interface com o usuário. |
+| **Arquiteto** | Llama 3.3 70B (Groq) | Planejamento lógico, pesquisa de requisitos e design de sistemas. |
+| **Coder** | DeepSeek V3 / Qwen 2.5 | Escrita de código pura e otimização para hardware limitado (1GB RAM). |
+| **Debugger/Reviewer** | Gemini 1.5 Flash | Validação de logs de erro e controle de qualidade. |
+| **Guia (User Liaison)** | Claude 3.5 Sonnet (Emergência) | Tradução técnica para o usuário leigo e solicitações de permissão humana. |
+
+### 4. Ciclo de Evolução Orgânica
+1. **Identificação:** O sistema detecta uma falha ou uma nova necessidade do usuário.
+2. **Pesquisa:** Busca autônoma por soluções via APIs de busca (Tavily/Exa).
+3. **Prototipagem:** Arquiteto planeja e Coder executa o código.
+4. **Deploy e Teste:** O script é enviado via SSH para a Oracle Cloud para validação real.
+5. **Feedback:** Se houver erro, o Debugger tenta corrigir (máx. 5 ciclos). Se persistir, o Guia solicita ajuda ao usuário de forma didática.
+
+### 5. Configuração Financeira (Pay-as-you-go)
+- **Orçamento:** U$ 5.00 a U$ 10.00 / mês.
+- **Prioridade de Gasto:** Créditos no OpenRouter para modelos de "Raciocínio Superior" (Claude/GPT-4) apenas em casos de falha dos modelos gratuitos.
+- **Estratégia:** Uso massivo de APIs gratuitas com fallback automático para modelos pagos.
+
+### 6. Regras de Ouro para o Sistema
+- **Persistência:** Todo estado deve ser salvo em `state.json` para resiliência a crashes do Android.
+- **Modularidade:** O código deve ser quebrado em pequenos scripts para rodar na instância de 1GB da Oracle.
+- **Comunicação Humana:** Nunca exibir erros de terminal puros; sempre explicar o problema e o que o usuário precisa fazer no celular para ajudar.

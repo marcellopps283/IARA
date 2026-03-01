@@ -1,0 +1,17 @@
+# KittyClaw / ZeroClaw — Dependências (Fase 1)
+# Instalar com: pip install -r requirements.txt
+
+# Telegram
+aiogram>=3.0
+
+# HTTP client (para LLM APIs e web search)
+aiohttp>=3.9
+
+# Database
+aiosqlite>=0.19
+
+# Web Search
+ddgs>=6.0
+
+# Config
+python-dotenv>=1.0
