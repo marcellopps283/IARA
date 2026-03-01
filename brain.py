@@ -870,6 +870,17 @@ async def main():
     await core.init_db()
     logger.info("✅ Memória inicializada")
     
+    try:
+        # Iniciamos o processo de backup como não-bloqueante para testar credenciais
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "backup_drive.py",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
+        )
+        logger.info("☁️ Verificação do Google Drive iniciada em background...")
+    except Exception as e:
+        logger.warning(f"⚠️ Não foi possível testar o backup: {e}")
+        
     # Recuperar jobs do swarm que podem ter sido interrompidos
     await orchestrator.load_pending_jobs()
 

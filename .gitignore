@@ -4,6 +4,8 @@
 .env.*.local
 *.pem
 *.key
+token.json
+client_secret*.json
 
 # Bancos de Dados (SQLite e Memória)
 *.db

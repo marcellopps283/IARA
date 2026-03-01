@@ -54,9 +54,16 @@
     @apply border-border;
   }
 
+  html,
+  body,
+  #root {
+    height: 100%;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
   body {
     @apply bg-background text-foreground;
-    overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
   }
 }
