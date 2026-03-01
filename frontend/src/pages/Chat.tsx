@@ -165,10 +165,7 @@ export default function Chat() {
             </div>
 
             {/* Input fixo no rodapé baseado no v0 */}
-            <div
-                className="border-t border-slate-800 bg-[#0f172a] px-4 pt-3 shrink-0"
-                style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}
-            >
+            <div className="border-t border-slate-800 bg-[#0f172a] px-4 pb-2 pt-2 shrink-0">
                 {/* Campo de input */}
                 <div className="max-w-4xl mx-auto">
                     <div className="flex items-center gap-2 rounded-2xl bg-[#1e293b] border border-slate-800 px-4 py-2 shadow-sm focus-within:ring-1 focus-within:ring-[#38bdf8]/50 transition-shadow">
