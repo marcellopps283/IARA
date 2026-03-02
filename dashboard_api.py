@@ -150,6 +150,9 @@ async def get_config():
 async def chat_endpoint(request: ChatRequest):
     async def event_generator():
         try:
+            active_project_id_str = await core.get_app_config("active_project_id")
+            project_id = int(active_project_id_str) if active_project_id_str and active_project_id_str.isdigit() else None
+
             yield "data: [STATUS] Interpretando intenção via Brain...\n\n"
             tool_context, intent, query = await brain.execute_tools(request.text)
             
@@ -159,7 +162,7 @@ async def chat_endpoint(request: ChatRequest):
                 yield "data: [STATUS] Convocando Conselho Multi-Modal (Groq, Cerebras, Mistral)...\n\n"
                 
                 system_prompt = await brain.build_system_prompt()
-                conversation = await core.get_conversation()
+                conversation = await core.get_conversation(project_id=project_id)
                 base_messages = [
                     {"role": "system", "content": system_prompt + tool_context},
                     *conversation,
@@ -197,7 +200,7 @@ async def chat_endpoint(request: ChatRequest):
             yield "data: [THINKING] Consolidando contexto da memória e tools...\n\n"
             
             system_prompt = await brain.build_system_prompt()
-            conversation = await core.get_conversation()
+            conversation = await core.get_conversation(project_id=project_id)
             messages = [
                 {"role": "system", "content": system_prompt + tool_context},
                 *conversation,
@@ -231,8 +234,37 @@ async def chat_endpoint(request: ChatRequest):
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ENDPOINTS DE PROJETO (PHASE 12)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.get("/api/projects")
+async def get_projects():
+    projects = await core.get_all_projects()
+    active_project_id_str = await core.get_app_config("active_project_id")
+    active_project_id = int(active_project_id_str) if active_project_id_str and active_project_id_str.isdigit() else None
+    return {
+        "projects": projects,
+        "activeProjectId": active_project_id
+    }
+
+@app.post("/api/projects/activate/{project_id}")
+async def activate_project(project_id: str):
+    if project_id.lower() in ("none", "global", "null", "0"):
+        await core.set_app_config("active_project_id", "")
+        return {"status": "success", "activeProjectId": None}
+    
+    # Valida se existe
+    p_name = await core.get_project_name(int(project_id))
+    if not p_name:
+        return JSONResponse(status_code=404, content={"error": "Projeto não encontrado"})
+
+    await core.set_app_config("active_project_id", str(project_id))
+    return {"status": "success", "activeProjectId": int(project_id)}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ENDPOINTS NOVOS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):

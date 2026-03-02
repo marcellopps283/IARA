@@ -373,7 +373,14 @@
 
     <main class="main-content">
         <header class="header">
-            <h2 id="page-title" style="margin: 0;">Visão Geral</h2>
+            <div style="display:flex; align-items:center; gap:20px;">
+                <h2 id="page-title" style="margin: 0;">Visão Geral</h2>
+                <select id="project-selector" onchange="changeProject(this.value)"
+                    style="background:var(--bg-dark); color:var(--text-main); border:1px solid var(--border); padding:5px 10px; border-radius:5px; outline:none; font-size:0.9rem;">
+                    <option value="none">🌍 Escopo Global</option>
+                    <!-- Options populadas via JS -->
+                </select>
+            </div>
             <div class="status-badge" id="header-status">
                 <div class="status-dot"></div>
                 VIVO (Uptime: --)
@@ -516,6 +523,41 @@
                 else if (currentTab === 'config') await fetchConfig();
             } catch (err) {
                 console.error("Erro ao buscar dados:", err);
+            }
+        }
+
+        async function fetchProjects() {
+            try {
+                const res = await fetch('/api/projects');
+                const data = await res.json();
+                const selector = document.getElementById('project-selector');
+
+                // Salvar o valor atual para não sobrescrever se o usuário estiver abrindo
+                const currentVal = selector.value;
+
+                let optionsHtml = '<option value="none">🌍 Escopo Global</option>';
+                data.projects.forEach(p => {
+                    optionsHtml += `<option value="${p.id}">🏢 ${p.name}</option>`;
+                });
+                selector.innerHTML = optionsHtml;
+
+                if (data.activeProjectId) {
+                    selector.value = data.activeProjectId;
+                } else {
+                    selector.value = "none";
+                }
+            } catch (err) {
+                console.error("Erro carregando projetos:", err);
+            }
+        }
+
+        async function changeProject(newId) {
+            try {
+                await fetch(`/api/projects/activate/${newId}`, { method: 'POST' });
+                await fetchProjects();
+                fetchDataForTab(); // Atualiza a aba atual para refletir os dados do novo projeto
+            } catch (err) {
+                console.error("Erro ao trocar de projeto:", err);
             }
         }
 
@@ -727,10 +769,14 @@
         }
 
         // Loop principal (polling 5s)
-        setInterval(fetchDataForTab, 5000);
+        setInterval(() => {
+            fetchDataForTab();
+            fetchProjects();
+        }, 5000);
 
         // Initial load
         fetchDataForTab();
+        fetchProjects();
 
     </script>
 </body>

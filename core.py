@@ -75,8 +75,45 @@ async def init_db():
             )
         """)
 
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # Phase 12 - Project Isolation
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS app_config (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+
+        # Schema Migrations: Adiciona project_id e embedding nas memórias existentes
+        # Como SQLite não tem "ADD COLUMN IF NOT EXISTS", capturamos o erro
+        tables_to_migrate = ["working_memory", "episodic_memory", "core_memory"]
+        for table in tables_to_migrate:
+            try:
+                await db.execute(f"ALTER TABLE {table} ADD COLUMN project_id INTEGER DEFAULT NULL")
+            except aiosqlite.OperationalError as e:
+                if "duplicate column name" not in str(e).lower():
+                    logger.warning(f"Erro ao migrar tabela {table}: {e}")
+            
+            # Trabalharemos com BLOB (bytes) para guardar arrays do embedding
+            try:
+                if table in ["episodic_memory", "core_memory"]:
+                    await db.execute(f"ALTER TABLE {table} ADD COLUMN embedding BLOB DEFAULT NULL")
+            except aiosqlite.OperationalError as e:
+                if "duplicate column name" not in str(e).lower():
+                    logger.warning(f"Erro ao adicionar embedding na tabela {table}: {e}")
+
         await db.commit()
-        logger.info("✅ Banco de dados inicializado com 5 tabelas centrais.")
+        logger.info("✅ Banco de dados inicializado com 5 tabelas centrais + schema de Projetos.")
 
     # Criar tabela de lembretes separadamente (migration segura)
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
@@ -102,20 +139,66 @@ async def init_db():
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# App Config & Project Config
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def get_app_config(key: str) -> str | None:
+    """Recupera um valor de configuração global do banco."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        cursor = await db.execute("SELECT value FROM app_config WHERE key = ?", (key,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+async def set_app_config(key: str, value: str):
+    """Define um valor de configuração global no banco."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        await db.execute(
+            "INSERT INTO app_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=?",
+            (key, value, value)
+        )
+        await db.commit()
+
+async def get_or_create_project(name: str) -> int:
+    """Busca um projeto pelo nome. Se não existir, cria-o e retorna o novo ID."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        cursor = await db.execute("SELECT id FROM projects WHERE name = ?", (name,))
+        row = await cursor.fetchone()
+        if row:
+            return row[0]
+            
+        cursor = await db.execute("INSERT INTO projects (name) VALUES (?)", (name,))
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_project_name(project_id: int) -> str | None:
+    """Retorna o nome do projeto dado o seu ID."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        cursor = await db.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+async def get_all_projects() -> list[dict]:
+    """Retorna a lista de todos os projetos cadastrados."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        cursor = await db.execute("SELECT id, name, description, created_at FROM projects ORDER BY name ASC")
+        rows = await cursor.fetchall()
+        return [{"id": r[0], "name": r[1], "description": r[2], "created_at": r[3]} for r in rows]
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Working Memory — Conversa atual (RAM da Kitty)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def save_message(role: str, content: str):
+async def save_message(role: str, content: str, project_id: int | None = None):
     """Salva uma mensagem na working memory."""
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
         await db.execute(
-            "INSERT INTO working_memory (role, content) VALUES (?, ?)",
-            (role, content)
+            "INSERT INTO working_memory (role, content, project_id) VALUES (?, ?, ?)",
+            (role, content, project_id)
         )
         await db.commit()
 
 
-async def get_conversation(limit: int = None) -> list[dict]:
+async def get_conversation(limit: int = None, project_id: int | None = None) -> list[dict]:
     """
     Retorna o histórico de conversas recente.
     Se limit for None, usa MAX_WORKING_MEMORY do config.
@@ -124,10 +207,16 @@ async def get_conversation(limit: int = None) -> list[dict]:
         limit = config.MAX_WORKING_MEMORY
 
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        cursor = await db.execute(
-            "SELECT role, content FROM working_memory ORDER BY id DESC LIMIT ?",
-            (limit,)
-        )
+        if project_id is not None:
+            cursor = await db.execute(
+                "SELECT role, content FROM working_memory WHERE project_id = ? OR project_id IS NULL ORDER BY id DESC LIMIT ?",
+                (project_id, limit)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT role, content FROM working_memory WHERE project_id IS NULL ORDER BY id DESC LIMIT ?",
+                (limit,)
+            )
         rows = await cursor.fetchall()
 
     # Retorna em ordem cronológica (mais antigo primeiro)
@@ -142,14 +231,14 @@ async def get_working_memory_count() -> int:
     return row[0]
 
 
-async def compact_working_memory(summary: str):
+async def compact_working_memory(summary: str, project_id: int | None = None):
     """
     Compacta working memory:
     1. Salva um resumo na episodic memory
     2. Limpa a working memory (mantém últimas 4 mensagens)
     """
-    # Salvar resumo na episodic
-    await save_episode(summary)
+    # Salvar resumo na episodic propagando o project_id
+    await save_episode(summary, tags="", project_id=project_id)
 
     # Manter apenas as últimas 4 mensagens
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
@@ -167,14 +256,27 @@ async def compact_working_memory(summary: str):
 # Episodic Memory — Conversas passadas (HD da Kitty)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def save_episode(summary: str, tags: str = ""):
+async def _background_embed_episode(episode_id: int, summary: str):
+    """Gera e salva o embedding de um episódio de forma assíncrona (não-bloqueante)."""
+    vector = await embeddings.generate_embedding(summary)
+    if vector:
+        blob = embeddings.serialize_embedding(vector)
+        async with aiosqlite.connect(str(config.DB_PATH)) as db:
+            await db.execute("UPDATE episodic_memory SET embedding = ? WHERE id = ?", (blob, episode_id))
+            await db.commit()
+
+async def save_episode(summary: str, tags: str = "", project_id: int | None = None):
     """Salva um resumo de conversa na episodic memory."""
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        await db.execute(
-            "INSERT INTO episodic_memory (summary, tags) VALUES (?, ?)",
-            (summary, tags)
+        cursor = await db.execute(
+            "INSERT INTO episodic_memory (summary, tags, project_id) VALUES (?, ?, ?)",
+            (summary, tags, project_id)
         )
+        episode_id = cursor.lastrowid
         await db.commit()
+        
+    # Dispara a geração do embedding sem bloquear o turno
+    asyncio.create_task(_background_embed_episode(episode_id, summary))
 
 
 async def get_episode_count() -> int:
@@ -185,24 +287,36 @@ async def get_episode_count() -> int:
     return row[0]
 
 
-async def get_all_episodes(limit: int = 20) -> list[str]:
+async def get_all_episodes(limit: int = 20, project_id: int | None = None) -> list[str]:
     """Retorna os resumos mais recentes como lista de strings."""
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        cursor = await db.execute(
-            "SELECT summary FROM episodic_memory ORDER BY id DESC LIMIT ?",
-            (limit,)
-        )
+        if project_id is not None:
+            cursor = await db.execute(
+                "SELECT summary FROM episodic_memory WHERE project_id = ? OR project_id IS NULL ORDER BY id DESC LIMIT ?",
+                (project_id, limit)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT summary FROM episodic_memory WHERE project_id IS NULL ORDER BY id DESC LIMIT ?",
+                (limit,)
+            )
         rows = await cursor.fetchall()
     return [r[0] for r in reversed(rows)]
 
 
-async def get_recent_episodes(limit: int = 5) -> list[dict]:
+async def get_recent_episodes(limit: int = 5, project_id: int | None = None) -> list[dict]:
     """Retorna os episódios mais recentes."""
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        cursor = await db.execute(
-            "SELECT summary, tags, timestamp FROM episodic_memory ORDER BY id DESC LIMIT ?",
-            (limit,)
-        )
+        if project_id is not None:
+            cursor = await db.execute(
+                "SELECT summary, tags, timestamp FROM episodic_memory WHERE project_id = ? OR project_id IS NULL ORDER BY id DESC LIMIT ?",
+                (project_id, limit)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT summary, tags, timestamp FROM episodic_memory WHERE project_id IS NULL ORDER BY id DESC LIMIT ?",
+                (limit,)
+            )
         rows = await cursor.fetchall()
 
     return [
@@ -210,6 +324,48 @@ async def get_recent_episodes(limit: int = 5) -> list[dict]:
         for r in reversed(rows)
     ]
 
+async def get_semantic_episodes(query_embedding: list[float], limit: int = 3, project_id: int | None = None) -> list[dict]:
+    """
+    Retorna os episódios mais semanticamente relevantes usando Cosine Similarity.
+    Se falhar, retorna os mais recentes.
+    """
+    if not query_embedding:
+        # Fallback silencioso para ordenação temporal
+        return await get_recent_episodes(limit, project_id)
+
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        if project_id is not None:
+            cursor = await db.execute(
+                "SELECT summary, tags, timestamp, embedding FROM episodic_memory WHERE project_id = ? OR project_id IS NULL",
+                (project_id,)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT summary, tags, timestamp, embedding FROM episodic_memory WHERE project_id IS NULL"
+            )
+        rows = await cursor.fetchall()
+
+    scored_episodes = []
+    for r in rows:
+        summary, tags, timestamp, blob = r
+        if not blob:
+            continue
+        
+        vec = embeddings.deserialize_embedding(blob)
+        if not vec:
+            continue
+            
+        score = embeddings.cosine_similarity(query_embedding, vec)
+        scored_episodes.append({
+            "summary": summary,
+            "tags": tags,
+            "timestamp": timestamp,
+            "score": score
+        })
+
+    # Sort descending by score
+    scored_episodes.sort(key=lambda x: x["score"], reverse=True)
+    return scored_episodes[:limit]
 
 async def search_episodes(query: str, limit: int = 3) -> list[dict]:
     """Busca episódios por palavra-chave (busca simples em texto)."""
@@ -252,38 +408,64 @@ async def delete_old_episodes(ids: list[int]):
 # Core Memory — Fatos permanentes (Alma da Kitty)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def save_core_fact(category: str, content: str, confidence: float = 1.0):
+async def _background_embed_core_fact(fact_id: int, content: str):
+    """Gera e salva o embedding de um fato permanente de forma assíncrona."""
+    vector = await embeddings.generate_embedding(content)
+    if vector:
+        blob = embeddings.serialize_embedding(vector)
+        async with aiosqlite.connect(str(config.DB_PATH)) as db:
+            await db.execute("UPDATE core_memory SET embedding = ? WHERE id = ?", (blob, fact_id))
+            await db.commit()
+
+async def save_core_fact(category: str, content: str, confidence: float = 1.0, project_id: int | None = None):
     """
     Salva um fato permanente na core memory.
-    Se o fato já existir (mesmo conteúdo), atualiza a confiança.
+    Se o fato já existir (mesmo conteúdo e projeto), atualiza a confiança.
     """
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        # Verifica se já existe
-        cursor = await db.execute(
-            "SELECT id FROM core_memory WHERE content = ?", (content,)
-        )
+        # Verifica se já existe para o mesmo projeto
+        if project_id is not None:
+            cursor = await db.execute(
+                "SELECT id FROM core_memory WHERE content = ? AND project_id = ?", (content, project_id)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT id FROM core_memory WHERE content = ? AND project_id IS NULL", (content,)
+            )
+        
         existing = await cursor.fetchone()
 
         if existing:
+            fact_id = existing[0]
             await db.execute(
                 "UPDATE core_memory SET confidence = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (confidence, existing[0])
+                (confidence, fact_id)
             )
         else:
-            await db.execute(
-                "INSERT INTO core_memory (category, content, confidence) VALUES (?, ?, ?)",
-                (category, content, confidence)
+            cursor = await db.execute(
+                "INSERT INTO core_memory (category, content, confidence, project_id) VALUES (?, ?, ?, ?)",
+                (category, content, confidence, project_id)
             )
+            fact_id = cursor.lastrowid
 
         await db.commit()
 
+    # Dispara a geração assíncrona do embedding
+    asyncio.create_task(_background_embed_core_fact(fact_id, content))
 
-async def get_core_memory() -> list[dict]:
-    """Retorna todos os fatos da core memory, ordenados por confiança."""
+
+async def get_core_memory(project_id: int | None = None) -> list[dict]:
+    """Retorna todos os fatos da core memory do projeto, ordenados por confiança."""
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        cursor = await db.execute(
-            "SELECT category, content, confidence, updated_at FROM core_memory ORDER BY confidence DESC"
-        )
+        if project_id is not None:
+            cursor = await db.execute(
+                "SELECT category, content, confidence, updated_at FROM core_memory WHERE project_id = ? OR project_id IS NULL ORDER BY confidence DESC",
+                (project_id,)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT category, content, confidence, updated_at FROM core_memory WHERE project_id IS NULL ORDER BY confidence DESC"
+            )
         rows = await cursor.fetchall()
 
     return [
@@ -297,11 +479,11 @@ async def get_core_memory() -> list[dict]:
     ]
 
 
-async def get_core_memory_text() -> str:
+async def get_core_memory_text(project_id: int | None = None) -> str:
     """Retorna a core memory formatada como texto para injetar no prompt."""
-    facts = await get_core_memory()
+    facts = await get_core_memory(project_id=project_id)
     if not facts:
-        return "Ainda não conheço fatos permanentes sobre o Criador."
+        return "Ainda não conheço fatos permanentes sobre o Criador no contexto deste projeto."
 
     lines = []
     for f in facts:
@@ -310,12 +492,61 @@ async def get_core_memory_text() -> str:
     return "\n".join(lines)
 
 
-async def delete_core_fact(content: str):
-    """Remove um fato da core memory."""
+async def get_semantic_core_facts(query_embedding: list[float], limit: int = 5, project_id: int | None = None) -> list[dict]:
+    """
+    Retorna os fatos permanentes mais relevantes.
+    Se não houver embedding, retorna ordenado por confiança (padrão).
+    """
+    if not query_embedding:
+        facts = await get_core_memory(project_id)
+        return facts[:limit]
+        
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        await db.execute(
-            "DELETE FROM core_memory WHERE content = ?", (content,)
-        )
+        if project_id is not None:
+            cursor = await db.execute(
+                "SELECT category, content, confidence, updated_at, embedding FROM core_memory WHERE project_id = ? OR project_id IS NULL",
+                (project_id,)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT category, content, confidence, updated_at, embedding FROM core_memory WHERE project_id IS NULL"
+            )
+        rows = await cursor.fetchall()
+
+    scored_facts = []
+    for r in rows:
+        category, content, conf, updated_at, blob = r
+        score = 0
+        if blob:
+            vec = embeddings.deserialize_embedding(blob)
+            if vec:
+                score = embeddings.cosine_similarity(query_embedding, vec)
+        
+        # Combinar Score + Confidence (Opcional, mas útil)
+        final_score = score * conf
+        scored_facts.append({
+            "category": category,
+            "content": content,
+            "confidence": conf,
+            "updated_at": updated_at,
+            "score": final_score
+        })
+
+    scored_facts.sort(key=lambda x: x["score"], reverse=True)
+    return scored_facts[:limit]
+
+
+async def delete_core_fact(content: str, project_id: int | None = None):
+    """Remove um fato da core memory no escopo do projeto."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        if project_id is not None:
+            await db.execute(
+                "DELETE FROM core_memory WHERE content = ? AND project_id = ?", (content, project_id)
+            )
+        else:
+            await db.execute(
+                "DELETE FROM core_memory WHERE content = ? AND project_id IS NULL", (content,)
+            )
         await db.commit()
 
 

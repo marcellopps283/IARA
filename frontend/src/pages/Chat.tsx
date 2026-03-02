@@ -77,7 +77,7 @@ export default function Chat() {
                     if (line.startsWith('data: ')) {
                         const data = line.slice(6);
 
-                        if (data.startsWith('[STATUS]') || data.startsWith('[THINKING]') || data.startsWith('[ERRO')) {
+                        if (data.startsWith('[STATUS]') || data.startsWith('[THINKING]') || data.startsWith('[ERRO]') || data.startsWith('[ERRO CRÍTICO]')) {
                             assistantMessage += `\n> ⚙️ \`${data}\`\n`;
                         } else if (data.startsWith('[ANSWER]')) {
                             assistantMessage += `\n\n`;

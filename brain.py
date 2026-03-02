@@ -280,13 +280,13 @@ _cot_enabled = False  # Chain of Thought toggle
 _reflect_enabled = False  # Auto-reflexão toggle
 
 
-async def build_system_prompt() -> str:
+async def build_system_prompt(query_embedding: list[float] | None = None, project_id: int | None = None) -> str:
     """Monta o system prompt estruturado em 4 Camadas de Memória Semântica Avançada."""
     identity = core.load_identity()
     
-    # Busca dados no banco para as 4 camadas
-    facts = await core.get_core_memory()
-    episodes = await core.get_recent_episodes(limit=2)
+    # Busca dados no banco para as 4 camadas (RAG via Similaridade de Cosseno se query_embedding estiver presente)
+    facts = await core.get_semantic_core_facts(query_embedding, limit=5, project_id=project_id)
+    episodes = await core.get_semantic_episodes(query_embedding, limit=3, project_id=project_id)
     reflections = await core.get_active_reflections()
     working_count = await core.get_working_memory_count()
 
@@ -472,6 +472,13 @@ async def process_message(text: str, message):
     chat_id = message.chat.id
     _reminder_chat_id = chat_id
 
+    # Recupera o projeto ativo
+    active_project_id_str = await core.get_app_config("active_project_id")
+    project_id = int(active_project_id_str) if active_project_id_str and active_project_id_str.isdigit() else None
+
+    # Embeddar a query do usuário assincronamente (Semantic RAG)
+    query_embedding = await embeddings.generate_query_embedding(text)
+
     # 0. Comandos especiais (não salvam na memória)
     text_lower = text.strip().lower()
     if text_lower in ("/think on", "/think", "think on"):
@@ -520,6 +527,28 @@ async def process_message(text: str, message):
                 "`/worker list`\n"
                 "`/worker ping`"
             ))
+        return
+
+    # Comandos de Isolamento de Projeto (Phase 12)
+    elif text_lower.startswith("/projeto"):
+        parts = text.strip().split(maxsplit=1)
+        if len(parts) > 1:
+            proj_name = parts[1].strip()
+            # Se chamou "none" ou "global", desativa
+            if proj_name.lower() in ("none", "global", "clear", "null"):
+                await core.set_app_config("active_project_id", "")
+                await telegram_bot.send_simple_message(chat_id, "🌍 **Escopo Global** ativado (Sem projeto).")
+            else:
+                new_proj_id = await core.get_or_create_project(proj_name)
+                await core.set_app_config("active_project_id", str(new_proj_id))
+                await telegram_bot.send_simple_message(chat_id, f"✅ Projeto ativo alterado para: **{proj_name}**")
+        else:
+            # Apenas mostra o ativo
+            if project_id:
+                p_name = await core.get_project_name(project_id)
+                await telegram_bot.send_simple_message(chat_id, f"🏢 Projeto ativo atual: **{p_name or 'Desconhecido'}**\nUse `/projeto [nome]` para trocar.")
+            else:
+                await telegram_bot.send_simple_message(chat_id, "🌍 Nenhum projeto ativo (Escopo Global).\nUse `/projeto [nome]` para criar/entrar em um.")
         return
 
     # Comandos Manual / Task Management (Stateful Todo)
@@ -581,7 +610,7 @@ async def process_message(text: str, message):
         return
 
     # 1. Salvar mensagem do Criador
-    await core.save_message("user", text)
+    await core.save_message("user", text, project_id=project_id)
 
     # 1.5 Verificar se há plano de pesquisa pendente de aprovação
     pending = deep_research.get_pending_plan(chat_id)
@@ -606,7 +635,7 @@ async def process_message(text: str, message):
             report = await deep_research.synthesize_with_citations(topic, all_data, sources, router, tipo=tipo)
 
             await telegram_bot.send_simple_message(chat_id, report)
-            await core.save_message("assistant", report)
+            await core.save_message("assistant", report, project_id=project_id)
             return
         else:
             # Usuário editou o plano — cancelar e tratar como mensagem normal
@@ -627,15 +656,15 @@ async def process_message(text: str, message):
         # Fase 2: Mostrar plano e aguardar aprovação
         deep_research.save_pending_plan(chat_id, query, plan)
         await telegram_bot.send_channel_message(chat_id, plan_msg, channel="final")
-        await core.save_message("assistant", plan_msg)
+        await core.save_message("assistant", plan_msg, project_id=project_id)
         return  # Aguarda resposta do usuário
 
     if intent == INTENT_COUNCIL:
         logger.info(f"⚖️ Iniciando Conselho Expandido para: {query}")
         await telegram_bot.send_channel_message(chat_id, "⚖️ Convocando Conselho Multi-Modal (Groq, Cerebras, Mistral)...", channel="commentary")
         
-        system_prompt = await build_system_prompt()
-        conversation = await core.get_conversation()
+        system_prompt = await build_system_prompt(query_embedding, project_id)
+        conversation = await core.get_conversation(project_id=project_id)
         base_messages = [
             {"role": "system", "content": system_prompt + tool_context},
             *conversation,
@@ -669,11 +698,11 @@ async def process_message(text: str, message):
             chat_id, stream, reply_to=message.message_id if message else None
         )
         if full_response:
-            await core.save_message("assistant", full_response)
+            await core.save_message("assistant", full_response, project_id=project_id)
         return
 
     # 4. Montar contexto e streaming
-    system_prompt = await build_system_prompt()
+    system_prompt = await build_system_prompt(query_embedding, project_id)
 
     # Injetar CoT se ativado
     cot_instruction = ""
@@ -687,7 +716,7 @@ async def process_message(text: str, message):
             "Resposta final aqui."
         )
 
-    conversation = await core.get_conversation()
+    conversation = await core.get_conversation(project_id=project_id)
     messages = [
         {"role": "system", "content": system_prompt + tool_context + cot_instruction},
         *conversation,
@@ -722,7 +751,7 @@ async def process_message(text: str, message):
 
     # 6. Salvar resposta
     if full_response:
-        await core.save_message("assistant", full_response)
+        await core.save_message("assistant", full_response, project_id=project_id)
 
     # 7. Auto-detect fatos
     if full_response and intent == "chat":
@@ -733,7 +762,7 @@ async def process_message(text: str, message):
         asyncio.create_task(_auto_reflect(text, full_response, router))
 
     # 9. Compactação
-    working_memory = await core.get_working_memory()
+    working_memory = await core.get_conversation(project_id=project_id)
     if len(working_memory) >= config.MAX_WORKING_MEMORY:
         await hooks.on_pre_compact(working_memory)
         logger.info(f"📦 Compactando working memory ({len(working_memory)} msgs)...")
@@ -743,7 +772,7 @@ async def process_message(text: str, message):
         ]
         summary = await router.generate(summary_messages)
         if isinstance(summary, str):
-            await core.compact_working_memory(summary)
+            await core.compact_working_memory(summary, project_id=project_id)
 
 
 async def _auto_detect_memory(user_text: str, router: LLMRouter):
