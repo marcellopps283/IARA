@@ -10,7 +10,6 @@ from datetime import datetime
 
 import core
 import config
-from llm_router import LLMRouter
 
 logger = logging.getLogger("hooks")
 
@@ -60,12 +59,13 @@ async def on_pre_compact(working_memory: list):
     logger.info(f"📦 Pre-Compact Hook disparado! Memória com {len(working_memory)} itens.")
     # Pode ser usado para extrair metadados matemáticos de uso antes do log virar resumo.
 
-async def on_session_end(chat_id: int, router: LLMRouter):
+async def on_session_end(chat_id: int, router: "LLMRouter"):
     """
     Instintos (Fase 5): Chamado ao final do fechamento diário ou ociosidade longa.
     Analisa os episódios não-processados para extrair "Instintos" vitais (o que funcionou/falhou).
     """
     logger.info("🌙 Session End. Extraindo INSTINTOS da sessão atual...")
+    from llm_router import LLMRouter
     
     episodes = await core.get_recent_episodes(limit=5)
     if not episodes:

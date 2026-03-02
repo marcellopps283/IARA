@@ -19,6 +19,8 @@ logger = logging.getLogger("core")
 async def init_db():
     """Cria as 3 tabelas de memória se não existirem."""
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA synchronous=NORMAL")
         # Working Memory — conversas ativas (curto prazo)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS working_memory (
@@ -510,9 +512,6 @@ async def get_system_status() -> str:
                     break
     except Exception:
         pass
-
-    return "\n  ".join(parts) if parts else "Status do sistema indisponível."
-
 
     return "\n  ".join(parts) if parts else "Status do sistema indisponível."
 
