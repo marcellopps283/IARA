@@ -440,6 +440,10 @@ async def execute_tools(text: str) -> tuple[str, str, str | None]:
     elif intent == "sandbox" and query:
         logger.info(f"☁️ Gerando código Python para a Sandbox E2B: {query}")
         
+        # Early-exit check to save tokens if API Key is missing
+        if not os.getenv("E2B_API_KEY"):
+            return "\n\n## [ERRO CRÍTICO] A chave E2B_API_KEY não está configurada no .env. Impossível ligar os motores da Sandbox Cloud.", intent, query
+
         # Pede pra LLM gerar o código python puro
         code_prompt = f"Escreva APENAS código Python para a seguinte solicitação: {query}. O código deve ser self-contained e printar o resultado ou plotar gráficos se necessário. Não use blocos markdown (```python), apenas o código puro."
         generated_code = await router.generate([{"role": "user", "content": code_prompt}], task_type="code", require_fast=True)
