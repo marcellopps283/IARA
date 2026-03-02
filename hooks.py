@@ -52,6 +52,7 @@ async def on_session_start(chat_id: int):
     # Limpa tarefas estáticas pendentes antigas
     async with __import__('aiosqlite').connect(str(config.DB_PATH)) as db:
         await db.execute("UPDATE tasks_state SET status = 'pending' WHERE status = 'in_progress'")
+        await db.execute("UPDATE swarm_jobs SET status = 'pending' WHERE status = 'processing'")
         await db.commit()
 
 async def on_pre_compact(working_memory: list):
