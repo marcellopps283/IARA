@@ -49,8 +49,27 @@ async def before_submit_prompt(prompt_text: str) -> str:
 async def on_session_start(chat_id: int):
     """Executado na primeira mensagem do dia/sessão."""
     logger.info("🌅 Iniciando nova sessão. Preparando banco e limpando caches temporários.")
-    # Limpa tarefas estáticas pendentes antigas
+    
     async with __import__('aiosqlite').connect(str(config.DB_PATH)) as db:
+        # Recuperação de Amnésia de Hardware
+        async with db.execute("SELECT id, summary FROM tasks_state WHERE status = 'in_progress'") as cursor:
+            orphaned_tasks = await cursor.fetchall()
+            
+        if orphaned_tasks:
+            import telegram_bot
+            import brain
+            for task_id, summary in orphaned_tasks:
+                logger.warning(f"🧟 Hardware Amnesia! Recuperando tarefa órfã #{task_id}...")
+                await telegram_bot.send_message(
+                    chat_id=config.TELEGRAM_CHAT_ID, 
+                    text=f"⚠️ **Amnésia de Hardware Recuperada**\nA tarefa `#{task_id}` foi abandonada em andamento (CRASH). Acionando o S21 FE..."
+                )
+                
+                # Re-injeta na fila usando o comando de start pra delegar automaticamente
+                asyncio.create_task(brain.process_message(f"/task start {task_id}", config.TELEGRAM_CHAT_ID))
+                await asyncio.sleep(1)
+        
+        # Limpa tarefas estáticas pendentes antigas para reiniciar do zero
         await db.execute("UPDATE tasks_state SET status = 'pending' WHERE status = 'in_progress'")
         await db.execute("UPDATE swarm_jobs SET status = 'pending' WHERE status = 'processing'")
         await db.commit()

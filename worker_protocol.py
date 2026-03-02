@@ -170,6 +170,45 @@ async def delegate(host: str, task: dict, timeout: int = 60) -> dict:
                 logger.warning(f"🔴 Worker {name} marcado offline devida a grande falha.")
         return {"error": f"Exceção catastrófica de despachante SSH: {str(e)[:200]}"}
 
+async def scp_file(host: str, local_path: str, remote_path: str, timeout: int = 120) -> dict:
+    """Envia arquivo físico pro Worker sobre SSH."""
+    logger.info(f"📦 SCP enviando {local_path} para {host}:{remote_path}")
+    if host == "localhost":
+        import shutil
+        import os
+        try:
+            expanded_remote = os.path.expanduser(remote_path)
+            expanded_local = os.path.expanduser(local_path)
+            shutil.copy2(expanded_local, expanded_remote)
+            return {"ok": True, "path": expanded_remote}
+        except Exception as e:
+            return {"error": f"Local copy falhou: {e}"}
+            
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "scp",
+            "-P", "2022",  # Porta do sshd do Proot-Distro/Termux
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=10",
+            local_path, f"{host}:{remote_path}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        
+        if proc.returncode != 0:
+            err = stderr.decode("utf-8", errors="replace")[:500]
+            logger.error(f"❌ SCP para {host} falhou: {err}")
+            return {"error": f"SCP falhou: {err}"}
+            
+        return {"ok": True, "path": remote_path}
+    except asyncio.TimeoutError:
+        logger.error(f"⏰ SCP para {host} sofreu timeout ({timeout}s)")
+        return {"error": "SCP Timeout"}
+    except Exception as e:
+        logger.error(f"❌ Exceção SCP: {e}")
+        return {"error": str(e)}
+
 
 
 async def delegate_parallel(workers: list[dict], tasks: list[dict], timeout: int = 60) -> list[dict]:

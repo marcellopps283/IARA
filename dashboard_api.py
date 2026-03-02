@@ -62,6 +62,9 @@ class TogglesRequest(BaseModel):
     cot: bool | None = None
     reflect: bool | None = None
 
+class KillRequest(BaseModel):
+    node: str = "S21FE"
+
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ENDPOINTS EXISTENTES
@@ -279,6 +282,34 @@ async def set_toggles(request: TogglesRequest):
     if request.reflect is not None:
         brain.reflect_enabled = request.reflect
     return {"cot": brain.cot_enabled, "reflect": brain.reflect_enabled}
+
+
+@app.post("/api/kill")
+async def kill_worker_task(request: KillRequest):
+    """Mata processo no Android Escravo e reseta tarefa."""
+    target_host = "S21FE"
+    if request.node in worker_protocol._workers:
+        target_host = worker_protocol._workers[request.node]["host"]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+            target_host, "pkill", "-f", "run_task.py",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=5.0)
+    except Exception as e:
+        logging.getLogger("dashboard").error(f"Kill falhou: {e}")
+
+    # Força tudo para pending pra desatarraxar o state
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        await db.execute("UPDATE tasks_state SET status = 'pending' WHERE status = 'in_progress'")
+        await db.execute("UPDATE swarm_jobs SET status = 'pending' WHERE status = 'processing'")
+        await db.commit()
+
+    return {"ok": True, "message": f"SIGKILL enviado para {request.node} e banco resetado."}
+
 
 
 # ── Servir build do React em produção ────────────────────

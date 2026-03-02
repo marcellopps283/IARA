@@ -10,6 +10,7 @@ class TransportServer:
     - O 'Heavy Worker' (S21 FE) deve ser iniciado rodando este server na porta 5556.
     - O 'Light Worker' (Moto G4 Harpia) deve ser iniciado rodando este server na porta 5558.
     """
+    def __init__(self, port=5556):
         self.port = port
         self.ctx = zmq.asyncio.Context()
         self.socket = self.ctx.socket(zmq.REP)
