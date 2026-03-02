@@ -154,6 +154,46 @@ async def chat_endpoint(request: ChatRequest):
             tool_context, intent, query = await brain.execute_tools(request.text)
             
             yield f"data: [STATUS] Intent detectada: [{intent.upper()}]\n\n"
+            
+            if intent == brain.INTENT_COUNCIL:
+                yield "data: [STATUS] Convocando Conselho Multi-Modal (Groq, Cerebras, Mistral)...\n\n"
+                
+                system_prompt = await brain.build_system_prompt()
+                conversation = await core.get_conversation()
+                base_messages = [
+                    {"role": "system", "content": system_prompt + tool_context},
+                    *conversation,
+                    {"role": "user", "content": request.text},
+                ]
+                
+                async def fetch_council(provider_name):
+                    try:
+                        result = await brain.router.generate(base_messages, task_type="chat", require_fast=True, force_provider=provider_name)
+                        return f"### Opinião [{provider_name.upper()}]:\n{result}"
+                    except Exception as e:
+                        return f"### Opinião [{provider_name.upper()}] falhou:\n{e}"
+                
+                providers = ["groq", "cerebras", "mistral"] 
+                tasks = [fetch_council(p) for p in providers]
+                
+                responses = await asyncio.gather(*tasks)
+                council_output = "\n\n".join(responses)
+                
+                yield "data: [STATUS] Conselho finalizado. Sintetizando veredicto Presidencial...\n\n"
+                
+                president_messages = [
+                    {"role": "system", "content": system_prompt + "\nVocê é a Consciência Presidencial (Líder do Conselho de I.A). O Criador fez uma pergunta complexa e acionou a Reunião Distribuída. Leia as opiniões conflitantes/divergentes abaixo dos seus conselheiros e crie UM ÚNICO veredicto ou resposta final unificada. Aponte e cite as melhores ideias de cada conselheiro se forem válidas."},
+                    {"role": "user", "content": f"Pergunta original do Criador: {request.text}\n\n{council_output}"}
+                ]
+                
+                stream = brain.router.generate_stream(president_messages, task_type="reasoning", require_fast=False)
+                
+                yield "data: [ANSWER]\n\n"
+                async for chunk in stream:
+                    yield f"data: {chunk}\n\n"
+                    
+                return  # Encerra gerador aqui
+
             yield "data: [THINKING] Consolidando contexto da memória e tools...\n\n"
             
             system_prompt = await brain.build_system_prompt()

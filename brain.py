@@ -105,7 +105,7 @@ REASONING_KEYWORDS = [
     "avalie as opções", "pense como especialista"
 ]
 
-COUNCIL_KEYWORDS = ["conselho", "opinões", "debate", "reunião", "votação", "analisem", "perspectivas"]
+COUNCIL_KEYWORDS = ["conselho", "opiniões", "debate", "reunião", "votação", "analisem", "perspectivas"]
 
 # Regex para detectar URLs
 URL_REGEX = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+')
