@@ -133,6 +133,11 @@ class PipelineManager:
             
             # (Aqui o loop será interrompido na vida real aguardando o usuário descer o lock)
             
+            # TODO: prosseguir após ExitPlanMode
+            # implementation_result = await self.run_stage_implement(plan_data)
+            # review_data = await self.run_stage_review(implementation_result)
+            # final_verdict = await self.run_stage_verify(review_data)
+            
         except Exception as e:
             logger.error(f"Erro catastrófico no pipeline: {e}")
             await self._send_commentary(f"🚨 Falha no pipeline: {str(e)[:100]}")
