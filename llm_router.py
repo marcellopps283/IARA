@@ -58,23 +58,44 @@ class LLMRouter:
             logger.warning(f"⚠️ Nenhum provider suporta tools para a task '{task_type}'. Ignorando requisito.")
             valid_provs = self.providers.copy()
 
+        # Regras de Força Maior (Exclusividade)
+        if task_type in ("vision", "embedding"):
+            # Gemini é o único que suporta Visão nativa (Multimodal) e Embeddings no nosso setup
+            valid_provs = [p for p in valid_provs if p["name"] == "gemini"]
+            if not valid_provs:
+                logger.error(f"❌ Tarefa '{task_type}' solicitada, mas Gemini não está configurado.")
+            return valid_provs
+
         # Priorização baseada na especialidade
         for p in valid_provs:
             name = p["name"].lower()
             score = 0
             
             if task_type in ("intent", "consolidation", "chat_fast"):
-                if name == "cerebras": score = 10     # Cerebras é ideal pra tasks rápidas sem reasoning
-                elif name == "groq": score = 5        # Groq é o 2o mais rápido
-            elif task_type in ("reasoning", "code", "plan"):
-                if name == "openrouter": score = 10   # Deepseek R1
-                elif name == "groq": score = 8        # LLama 3.3 70B
+                if name.startswith("cerebras"): score = 10     # Cerebras é ideal pra tasks rápidas sem reasoning
+                elif name.startswith("groq"): score = 5        # Groq é o 2o mais rápido
+                
+            elif task_type == "reasoning":
+                # R1 reina em reasoning absoluto. (Sem tools)
+                if name == "openrouter": score = 10
+                elif name.startswith("groq"): score = 8
+                
+            elif task_type in ("code", "plan"):
+                # R1 NUNCA deve cair aqui pois não suporta Tools, tarefas de plano/codigo do arquitet dependem de tools.
+                if name.startswith("groq"): score = 10
+                elif name == "gemini": score = 8
+                elif name == "mistral": score = 6              # Mistral Large como ótimo fallback pra code/tools
+                
             elif task_type == "research":
                 if name == "kimi": score = 10         # Bom para lidar com grandes contextos
-                elif name == "groq": score = 8
-            else: # "chat", "tools" e outros
-                if name == "groq": score = 10
-                elif name == "kimi": score = 8
+                elif name.startswith("groq"): score = 8
+                elif name == "gemini": score = 7
+                
+            else: # "chat", "tools" e tarefas gerais
+                if name.startswith("groq"): score = 10
+                elif name == "gemini": score = 8
+                elif name == "mistral": score = 7
+                elif name == "kimi": score = 6
                 
             sorted_provs.append((score, p))
             
@@ -136,8 +157,10 @@ class LLMRouter:
                                         break # Vai pro fallback (próximo provider)
                                         
                                 if resp.status != 200:
-                                    error_text = await resp.text()
-                                    logger.warning(f"⚠️ {provider['name']}: HTTP {resp.status} - {error_text[:200]}")
+                                    raw_err = await resp.text()
+                                    error_text = str(raw_err)
+                                    abbr_err = error_text[:200] if len(error_text) > 200 else error_text
+                                    logger.warning(f"⚠️ {provider['name']}: HTTP {resp.status} - {abbr_err}")
                                     break # Erros normais não dão retry, fazemos fallback
 
                                 data = await resp.json()
@@ -156,8 +179,10 @@ class LLMRouter:
                 last_error = f"Timeout em {provider['name']}"
                 continue
             except Exception as e:
-                logger.warning(f"⚠️ {provider['name']} falhou: {str(e)[:200]}")
-                last_error = str(e)
+                err_str = str(e)
+                abbr_err = err_str[:200] if len(err_str) > 200 else err_str
+                logger.warning(f"⚠️ {provider['name']} falhou: {abbr_err}")
+                last_error = err_str
                 continue
 
         raise RuntimeError(f"❌ Todos os providers falharam. Último: {last_error}")
@@ -173,6 +198,7 @@ class LLMRouter:
         Faz fallback automático se o provider falhar.
         """
         target_providers = self._sort_providers_for_task(task_type, False)
+        last_error = None
 
         # Hook de Segurança (Red Team): Ofuscar chaves/tokens
         for m in messages:
@@ -218,9 +244,11 @@ class LLMRouter:
                                         break # Vai pro fallback
 
                                 if resp.status != 200:
-                                    error_text = await resp.text()
+                                    raw_err = await resp.text()
+                                    error_text = str(raw_err)
+                                    abbr_err = error_text[:200] if len(error_text) > 200 else error_text
                                     logger.warning(f"⚠️ Streaming {provider['name']}: HTTP {resp.status}")
-                                    last_error = error_text[:200]
+                                    last_error = abbr_err
                                     break
 
                                 # Parse SSE stream
@@ -245,8 +273,10 @@ class LLMRouter:
                 return  # Stream completou
 
             except Exception as e:
-                logger.warning(f"⚠️ Streaming '{provider['name']}' falhou: {str(e)[:200]}")
-                last_error = str(e)
+                err_str = str(e)
+                abbr_err = err_str[:200] if len(err_str) > 200 else err_str
+                logger.warning(f"⚠️ Streaming '{provider['name']}' falhou: {abbr_err}")
+                last_error = err_str
                 continue
 
         # Se streaming falhou, tenta sem stream

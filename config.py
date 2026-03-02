@@ -13,7 +13,9 @@ load_dotenv()
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_API_KEY_2 = os.getenv("GROQ_API_KEY_2", "")
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
+CEREBRAS_API_KEY_2 = os.getenv("CEREBRAS_API_KEY_2", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 NVIDIA_NIM_API_KEY = os.getenv("NVIDIA_NIM_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -28,6 +30,15 @@ LLM_PROVIDERS = [
         "name": "groq",
         "base_url": "https://api.groq.com/openai/v1",
         "api_key": GROQ_API_KEY,
+        "model": "llama-3.3-70b-versatile",
+        "max_tokens": 4096,
+        "supports_streaming": True,
+        "supports_tools": True,
+    },
+    {
+        "name": "groq_2",
+        "base_url": "https://api.groq.com/openai/v1",
+        "api_key": GROQ_API_KEY_2,
         "model": "llama-3.3-70b-versatile",
         "max_tokens": 4096,
         "supports_streaming": True,
@@ -50,6 +61,15 @@ LLM_PROVIDERS = [
         "max_tokens": 4096,
         "supports_streaming": True,
         "supports_tools": False,  # 8B model não é confiável com tools
+    },
+    {
+        "name": "cerebras_2",
+        "base_url": "https://api.cerebras.ai/v1",
+        "api_key": CEREBRAS_API_KEY_2,
+        "model": "llama3.1-8b",
+        "max_tokens": 4096,
+        "supports_streaming": True,
+        "supports_tools": False,
     },
     {
         "name": "openrouter",
