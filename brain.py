@@ -625,7 +625,7 @@ async def process_message(text: str, message):
     if full_response and _reflect_enabled:
         asyncio.create_task(_auto_reflect(text, full_response, router))
 
-    # 7. Compactação
+    # 9. Compactação
     working_memory = await core.get_working_memory()
     if len(working_memory) >= config.MAX_WORKING_MEMORY:
         await hooks.on_pre_compact(working_memory)
@@ -850,8 +850,18 @@ async def _heartbeat_and_compaction_loop():
     logger.info("🗑️ Heartbeat + Compaction loop iniciado")
     while True:
         try:
-            logger.info("🗑️ Executando Heartbeat + Compaction das memórias...")
-            await core.compact_working_memory(router) # Assuming 'router' is accessible or passed
+            working_memory = await core.get_working_memory()
+            if len(working_memory) >= config.MAX_WORKING_MEMORY:
+                logger.info(f"🗑️ Compactando working memory ({len(working_memory)} msgs)...")
+                summary_messages = [
+                    {"role": "system", "content": "Resuma em 2-3 frases:"},
+                    *working_memory,
+                ]
+                summary = await router.generate(summary_messages)
+                if isinstance(summary, str):
+                    await core.compact_working_memory(summary)
+            else:
+                logger.info("🗑️ Heartbeat: memória dentro do limite, sem necessidade de compactação.")
         except Exception as e:
             logger.debug(f"Erro no heartbeat: {e}")
 
