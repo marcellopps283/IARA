@@ -9,6 +9,7 @@ import logging
 import re
 import sys
 from datetime import datetime, timedelta
+import hooks
 
 # Configurar logging antes de importar módulos
 logging.basicConfig(
@@ -222,7 +223,7 @@ def parse_reminder_time(text: str) -> tuple[str, datetime | None]:
         minute = int(match.group(2) or 0)
         target = now.replace(hour=hour, minute=minute, second=0)
         if target < now:
-            target += timedelta(days=1)
+            target = target + timedelta(days=1)
 
         msg = re.sub(r'[àa]s?\s+\d{1,2}[h:]\d{0,2}', '', text, flags=re.IGNORECASE).strip()
         for kw in REMINDER_KEYWORDS:
@@ -247,11 +248,49 @@ _reflect_enabled = False  # Auto-reflexão toggle
 
 
 async def build_system_prompt() -> str:
-    """Monta o system prompt com identidade + core memory + contexto temporal."""
+    """Monta o system prompt estruturado em 4 Camadas de Memória Semântica Avançada."""
     identity = core.load_identity()
-    core_mem = await core.get_core_memory_text()
-    episodes = await core.get_recent_episodes(limit=3)
+    
+    # Busca dados no banco para as 4 camadas
+    facts = await core.get_core_memory()
+    episodes = await core.get_recent_episodes(limit=2)
+    reflections = await core.get_active_reflections()
+    working_count = await core.get_working_memory_count()
 
+    # Camada 1: Metadata & Estatísticas (Sintético por enquanto)
+    # TODO: Implementar query real de uso no futuro
+    layer1_meta = (
+        f"⏳ Interações na sessão ativa: {working_count}/10 antes da compactação.\n"
+        f"🧠 Confiança média nas regras deduzidas: Alta (Confidence Score ativo)."
+    )
+
+    # Camada 2: Preferências do Assistente (Regras de ouro e Fatos Core)
+    lines_pref = []
+    lines_facts = []
+    if facts:
+        for f in facts:
+            score = f.get('confidence', 1.0)
+            if "preferencia" in f['category'].lower() or "regra" in f['category'].lower():
+                lines_pref.append(f"- [Confidence: {score:.2f}] {f['content']}")
+            else:
+                lines_facts.append(f"- {f['content']}")
+    
+    layer2_prefs = "\n".join(lines_pref) if lines_pref else "- Nenhuma regra de ouro estrita detectada."
+    if lines_facts:
+        layer2_prefs += "\n\n💡 Fatos Permanentes:\n" + "\n".join(lines_facts)
+
+    if reflections:
+        layer2_prefs += "\n\n💡 Auto-Reflexões (Lições Aprendidas):\n" + "\n".join(f"- {r}" for r in reflections)
+
+    # Camada 3: Tópicos Ativos (Histórico Alto-Nível)
+    layer3_topics = ""
+    if episodes:
+        layer3_topics = "\n".join(f"- {ep['summary']}" for ep in episodes)
+    else:
+        layer3_topics = "- Nenhum tópico denso recente."
+
+    # Camada 4: Retomada Densa (Contexto conversacional puro — injetado pela própria LLMRouter como messages)
+    
     # Contexto temporal
     now = datetime.now()
     time_ctx = now.strftime("Hoje é %A, %d/%m/%Y. São %H:%M (horário de Brasília).")
@@ -263,31 +302,27 @@ async def build_system_prompt() -> str:
     for en, pt in days_pt.items():
         time_ctx = time_ctx.replace(en, pt)
 
-    episode_text = ""
-    if episodes:
-        episode_text = "\n\n## Conversas recentes:\n"
-        for ep in episodes:
-            episode_text += f"- {ep['summary']}\n"
-
-    # Reflexões ativas
-    reflections = await core.get_active_reflections()
-    reflection_text = ""
-    if reflections:
-        reflection_text = "\n\n## Lições aprendidas (auto-reflexão):\n"
-        for r in reflections:
-            reflection_text += f"- {r}\n"
-
     return f"""{identity}
 
----
-
-## Contexto:
 {time_ctx}
 
-## Memória Core (fatos permanentes sobre o Criador):
-{core_mem}
-{episode_text}
-{reflection_text}"""
+=========================================
+INJEÇÃO DE MEMÓRIA (4 CAMADAS SEMÂNTICAS)
+=========================================
+
+[CAMADA 1: METADADOS DE INTERAÇÃO]
+{layer1_meta}
+
+[CAMADA 2: PREFERÊNCIAS E REGRAS DE OURO]
+{layer2_prefs}
+
+[CAMADA 3: TÓPICOS ATIVOS RECENTES]
+{layer3_topics}
+
+[CAMADA 4: RETOMADA DENSA]
+(Verifique as mensagens mais recentes abaixo neste histórico de chat).
+=========================================
+"""
 
 
 async def execute_tools(text: str) -> tuple[str, str, str | None]:
@@ -431,10 +466,50 @@ async def process_message(text: str, message):
             ))
         return
 
+    # Comandos Manual / Task Management (Stateful Todo)
+    elif text_lower.startswith("/task"):
+        parts = text.strip().split(" ", 2)
+        cmd = parts[1].lower() if len(parts) > 1 else "list"
+        
+        if cmd == "add" and len(parts) > 2:
+            desc = parts[2]
+            tid = await core.add_task_state(desc)
+            await telegram_bot.send_simple_message(chat_id, f"📝 **Tarefa #{tid} pendente:** {desc}")
+        elif cmd == "start" and len(parts) > 2:
+            tid = parts[2]
+            # Verifica se já tem in_progress
+            active = await core.get_active_task()
+            if active and str(active["id"]) != tid:
+                await telegram_bot.send_simple_message(chat_id, f"⚠️ Trava de Fluxo: A tarefa #{active['id']} já está em progresso. Conclua-a primeiro (/task done {active['id']}).")
+                return
+            await core.set_task_status(int(tid), "in_progress")
+            await telegram_bot.send_simple_message(chat_id, f"🚀 **Iniciando tarefa #{tid}**.")
+        elif cmd == "done" and len(parts) > 2:
+            tid = parts[2]
+            await core.set_task_status(int(tid), "completed")
+            await telegram_bot.send_simple_message(chat_id, f"✅ **Tarefa #{tid} concluída!**")
+        else:
+            active = await core.get_active_task()
+            msg = "📋 **Status das Tarefas:**\n"
+            msg += f"Em progresso: #{active['id']} - {active['description']}\n" if active else "Em progresso: Nenhuma\n"
+            msg += "\nComandos: `/task add [desc]`, `/task start [id]`, `/task done [id]`"
+            await telegram_bot.send_simple_message(chat_id, msg)
+        return
+
+    # Plan Mode Lock
+    elif text_lower in ("/plan on", "/planmode on"):
+        await telegram_bot.send_channel_message(chat_id, "🔒 **EnterPlanMode**: Agente bloqueado para edição. Apenas pesquisas e arquitetura permitidas.", channel="commentary")
+        await core.save_message("system", "O usuário ativou o PlanMode. Edição de código está bloqueada. Gere um plano e peça aprovação via ExitPlanMode.")
+        return
+    elif text_lower in ("/plan off", "/planmode off"):
+        await telegram_bot.send_channel_message(chat_id, "🔓 **ExitPlanMode**: Plano aprovado. Edição de código liberada.", channel="commentary")
+        await core.save_message("system", "O usuário desativou o PlanMode (ExitPlanMode). Você está autorizado a implementar o código.")
+        return
+
     # Comando Manual pra testar consolidação
     elif text_lower == "/consolidate":
         await telegram_bot.send_simple_message(chat_id, "🧠 Iniciando consolidação de memória manual...")
-        asyncio.create_task(_run_consolidation(chat_id))
+        asyncio.create_task(core.consolidate_working_memory())
         return
 
     # 0.5 Interceptar documentos anexados
@@ -443,9 +518,9 @@ async def process_message(text: str, message):
         file_path = parts[0]
         question = parts[1] if len(parts) > 1 else None
         logger.info(f"📄 Analisando documento: {file_path}")
-        await telegram_bot.send_simple_message(chat_id, "📄 **Analisando documento...**")
+        await telegram_bot.send_channel_message(chat_id, "📄 Analisando documento...", channel="commentary")
         result = await doc_reader.analyze_document(file_path, router, question)
-        await telegram_bot.send_simple_message(chat_id, result)
+        await telegram_bot.send_channel_message(chat_id, result, channel="final")
         await core.save_message("assistant", result)
         return
 
@@ -487,7 +562,7 @@ async def process_message(text: str, message):
 
     if intent == "deep_research" and query:
         logger.info(f"🔬 Deep Research Plan & Execute: {query}")
-        await telegram_bot.send_simple_message(chat_id, "🔬 **Analisando tema e criando plano de pesquisa...**")
+        await telegram_bot.send_channel_message(chat_id, "🔬 Analisando tema e criando plano de pesquisa...", channel="commentary")
         
         # Fase 1: Criar plano
         plan = await deep_research.create_plan(query, router)
@@ -495,7 +570,7 @@ async def process_message(text: str, message):
         
         # Fase 2: Mostrar plano e aguardar aprovação
         deep_research.save_pending_plan(chat_id, query, plan)
-        await telegram_bot.send_simple_message(chat_id, plan_msg)
+        await telegram_bot.send_channel_message(chat_id, plan_msg, channel="final")
         await core.save_message("assistant", plan_msg)
         return  # Aguarda resposta do usuário
 
@@ -525,14 +600,14 @@ async def process_message(text: str, message):
         chat_id, stream, reply_to=message.message_id
     )
 
-    # 5. Processar CoT — extrair e enviar raciocínio separado
+    # 5. Processar CoT — extrair e enviar raciocínio separado (Analysis Channel)
     if full_response and _cot_enabled:
         think_match = re.search(r'<think>(.*?)</think>', full_response, re.DOTALL)
         if think_match:
             thinking = think_match.group(1).strip()
-            # Enviar o raciocínio como mensagem separada
+            # Enviar o raciocínio como mensagem no canal invisível
             if thinking:
-                await telegram_bot.send_simple_message(chat_id, f"🧠 *Raciocínio:*\n{thinking}")
+                await telegram_bot.send_channel_message(chat_id, f"Raciocínio: {thinking}", channel="analysis")
             # Limpar a resposta final
             clean_response = re.sub(r'<think>.*?</think>\s*', '', full_response, flags=re.DOTALL).strip()
             if clean_response != full_response:
@@ -551,9 +626,10 @@ async def process_message(text: str, message):
         asyncio.create_task(_auto_reflect(text, full_response, router))
 
     # 7. Compactação
-    count = await core.get_working_memory_count()
-    if count > config.MAX_WORKING_MEMORY:
-        logger.info(f"📦 Compactando working memory ({count} msgs)...")
+    working_memory = await core.get_working_memory()
+    if len(working_memory) >= config.MAX_WORKING_MEMORY:
+        await hooks.on_pre_compact(working_memory)
+        logger.info(f"📦 Compactando working memory ({len(working_memory)} msgs)...")
         summary_messages = [
             {"role": "system", "content": "Resuma em 2-3 frases:"},
             *conversation,
@@ -890,13 +966,16 @@ async def main():
     telegram_bot.set_message_handler(process_message)
     logger.info("✅ Telegram configurado")
 
-    # Iniciar loops em background
+    # Inicializa serviços agendados
     asyncio.create_task(_reminder_loop())
     asyncio.create_task(_preference_learning_loop())
     asyncio.create_task(_proactive_alerts_loop())
     asyncio.create_task(_worker_health_loop())
     asyncio.create_task(_heartbeat_and_compaction_loop())
     asyncio.create_task(_memory_consolidation_loop())
+    
+    # Executa Hook de inicialização
+    await hooks.on_session_start(0)
 
     # Iniciar Dashboard Web
     logger.info("🌐 Iniciando Dashboard Web (FastAPI) na porta 8080...")

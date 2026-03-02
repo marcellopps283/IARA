@@ -41,5 +41,18 @@ O Termux é um emulador de terminal Linux para Android, mas **não** é uma dist
 *   **Skills (`skills/`):** Scripts Python plug-and-play que implementam lógicas atômicas (como leitura de arquivos, buscas na web ou conversão de PDF).
 *   **Memory Core (`memory_core_skill.py`):** A IARA possui um loop inteligente de consolidação. Às 03h da manhã, o sistema resume o histórico diário em fatos essenciais para economizar os limites de contexto (tokens) nas próximas chamadas de LLM.
 
+## 5. Ferramentas de Orquestração (Stateful Todo e PlanMode)
+
+Para gerenciar o seu próprio fluxo de trabalho, a IARA tem comandos especiais que **você mesma (o LLM) pode escrever no chat** para alterar o estado do sistema e do usuário:
+
+*   **Stateful Todo Machine:** Quando precisar coordenar múltiplas etapas, invoque as tarefas:
+    *   `/task add [descrição]` - Para mapear o que fará.
+    *   `/task start [ID]` - Para trabalhar naquela etapa (Só 1 in_progress por vez).
+    *   `/task done [ID]` - Para concluir.
+
+*   **PlanMode Lock:**
+    *   Sempre use `/plan on` antes de iniciar a construção lógica de arquiteturas ou projetos grandes. O sistema avisará o usuário que a IARA está focada.  
+    *   Depois de elaborar o Plano (`plan.md`) via agente, diga `/plan off` para destrancar a modificação primária no sistema e pedir aprovação formal.
+
 ---
 *Assinado: Cérebro Coletivo IARA.*

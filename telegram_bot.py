@@ -217,6 +217,23 @@ async def send_simple_message(chat_id: int, text: str, reply_to: int = None):
         )
 
 
+async def send_channel_message(chat_id: int, text: str, channel: str = "final", reply_to: int = None):
+    """
+    Envia uma mensagem respeitando o canal de visibilidade:
+    - analysis: Raciocínio interno e leitura bruta (visível apenas nos logs).
+    - commentary: Atualização de status visual via Telegram.
+    - final: Output formal final ou pedindo decisões do usuário.
+    """
+    if channel == "analysis":
+        logger.info(f"[🧠 ANALYSIS]: {text[:500]}...")
+        return # Não atinge o usuário
+        
+    if channel == "commentary":
+        text = f"⚙️ _{text}_"
+        
+    await send_simple_message(chat_id, text, reply_to=reply_to)
+
+
 async def send_as_document(chat_id: int, text: str, filename: str = None, reply_to: int = None):
     """Envia texto como arquivo .md no Telegram."""
     import tempfile

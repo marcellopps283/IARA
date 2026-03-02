@@ -62,8 +62,19 @@ async def init_db():
             )
         """)
 
+        # Stateful Todo Machine (Phase 1)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS tasks_state (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                description TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         await db.commit()
-        logger.info("✅ Banco de dados inicializado com 4 tabelas centrais.")
+        logger.info("✅ Banco de dados inicializado com 5 tabelas centrais.")
 
     # Criar tabela de lembretes separadamente (migration segura)
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
@@ -621,4 +632,37 @@ async def update_swarm_job_status(job_id: int, status: str, result: str = None):
                 "UPDATE swarm_jobs SET status = ? WHERE id = ?",
                 (status, job_id)
             )
+        await db.commit()
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Stateful Todo Machine (Fase 1)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def add_task_state(description: str) -> int:
+    """Adiciona uma tarefa na máquina de estados."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        cursor = await db.execute(
+            "INSERT INTO tasks_state (description) VALUES (?)",
+            (description,)
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_active_task() -> dict | None:
+    """Busca a única tarefa permitida em in_progress."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM tasks_state WHERE status = 'in_progress' ORDER BY id ASC LIMIT 1"
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+async def set_task_status(task_id: int, status: str):
+    """Atualiza o status de uma tarefa na máquina de estados."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        await db.execute(
+            "UPDATE tasks_state SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (status, task_id)
+        )
         await db.commit()

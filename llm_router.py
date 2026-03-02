@@ -13,6 +13,7 @@ from typing import AsyncGenerator
 import aiohttp
 
 import config
+import hooks
 
 logger = logging.getLogger("llm_router")
 
@@ -45,22 +46,57 @@ class LLMRouter:
         if not self.providers:
             raise RuntimeError("❌ Nenhum provider de LLM configurado! Verifique o .env")
 
+    def _sort_providers_for_task(self, task_type: str, requires_tools: bool) -> list[dict]:
+        """Ordena os provedores disponíveis baseando-se no tipo de tarefa e necessidade de tools."""
+        sorted_provs = []
+        
+        # Filtrar suporte a tools primeiro
+        valid_provs = [p for p in self.providers if not (requires_tools and not p.get("supports_tools"))]
+        
+        if not valid_provs:
+            # Fallback forçado se ninguém suportar e tools forem pedidas
+            logger.warning(f"⚠️ Nenhum provider suporta tools para a task '{task_type}'. Ignorando requisito.")
+            valid_provs = self.providers.copy()
+
+        # Priorização baseada na especialidade
+        for p in valid_provs:
+            name = p["name"].lower()
+            score = 0
+            
+            if task_type in ("intent", "consolidation", "chat_fast"):
+                if name == "cerebras": score = 10     # Cerebras é ideal pra tasks rápidas sem reasoning
+                elif name == "groq": score = 5        # Groq é o 2o mais rápido
+            elif task_type in ("reasoning", "code", "plan"):
+                if name == "openrouter": score = 10   # Deepseek R1
+                elif name == "groq": score = 8        # LLama 3.3 70B
+            elif task_type == "research":
+                if name == "kimi": score = 10         # Bom para lidar com grandes contextos
+                elif name == "groq": score = 8
+            else: # "chat", "tools" e outros
+                if name == "groq": score = 10
+                elif name == "kimi": score = 8
+                
+            sorted_provs.append((score, p))
+            
+        # Retorna ordenado do maior score pro menor
+        sorted_provs.sort(key=lambda x: x[0], reverse=True)
+        return [p for score, p in sorted_provs]
+
     async def generate(
         self,
         messages: list[dict],
         tools: list[dict] | None = None,
         temperature: float = 0.7,
+        task_type: str = "chat",
     ) -> str | dict:
         """
-        Gera uma resposta usando o primeiro provider disponível.
-        Se falhar, faz fallback para o próximo.
-        
-        Returns:
-            Texto da resposta OU dict com tool_calls.
+        Gera uma resposta usando o provider mais adequado para a tarefa.
+        Se falhar, faz fallback para o próximo da lista ordenada.
         """
         last_error = None
+        target_providers = self._sort_providers_for_task(task_type, bool(tools))
 
-        for provider in self.providers:
+        for provider in target_providers:
             try:
                 logger.info(f"🧠 Tentando: {provider['name']} ({provider['model']})")
                 self.current_provider = provider["name"]
@@ -130,14 +166,20 @@ class LLMRouter:
         self,
         messages: list[dict],
         temperature: float = 0.7,
+        task_type: str = "chat",
     ) -> AsyncGenerator[str, None]:
         """
         Gera resposta em streaming (token por token via SSE).
         Faz fallback automático se o provider falhar.
         """
-        last_error = None
+        target_providers = self._sort_providers_for_task(task_type, False)
 
-        for provider in self.providers:
+        # Hook de Segurança (Red Team): Ofuscar chaves/tokens
+        for m in messages:
+            if isinstance(m.get("content"), str):
+                m["content"] = await hooks.before_submit_prompt(m["content"])
+
+        for provider in target_providers:
             if not provider.get("supports_streaming"):
                 continue
 

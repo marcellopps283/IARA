@@ -16,6 +16,8 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 NVIDIA_NIM_API_KEY = os.getenv("NVIDIA_NIM_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "")
 USER_ID_ALLOWED = int(os.getenv("USER_ID_ALLOWED", "0"))
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -57,6 +59,24 @@ LLM_PROVIDERS = [
         "max_tokens": 4096,
         "supports_streaming": True,
         "supports_tools": False,  # R1 não suporta tools nativamente
+    },
+    {
+        "name": "gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "api_key": GEMINI_API_KEY,
+        "model": "gemini-2.5-flash",
+        "max_tokens": 8192,
+        "supports_streaming": True,
+        "supports_tools": True,
+    },
+    {
+        "name": "mistral",
+        "base_url": "https://api.mistral.ai/v1",
+        "api_key": MISTRAL_API_KEY,
+        "model": "mistral-large-latest",
+        "max_tokens": 4096,
+        "supports_streaming": True,
+        "supports_tools": True,
     },
 ]
 
