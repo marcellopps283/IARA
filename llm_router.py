@@ -114,7 +114,6 @@ class LLMRouter:
         Gera uma resposta usando o provider mais adequado para a tarefa.
         Se falhar, faz fallback para o próximo da lista ordenada.
         """
-        import hooks
         # Hook de Segurança (Red Team): Ofuscar chaves/tokens
         for m in messages:
             if isinstance(m.get("content"), str):
