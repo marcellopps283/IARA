@@ -106,6 +106,7 @@ REASONING_KEYWORDS = [
 ]
 
 COUNCIL_KEYWORDS = ["conselho", "opiniões", "debate", "reunião", "votação", "analisem", "perspectivas"]
+SANDBOX_KEYWORDS = ["sandbox", "e2b", "nuvem", "cloud", "gráfico", "plot", "code interpreter"]
 
 # Regex para detectar URLs
 URL_REGEX = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+')
@@ -184,6 +185,14 @@ async def classify_intent(text: str, router: LLMRouter) -> tuple[str, str | None
             for k in COUNCIL_KEYWORDS:
                 query = query.replace(k, "").strip()
             return (INTENT_COUNCIL, query or text)
+
+    # Sandbox (E2B Cloud Code Interpreter)
+    for kw in SANDBOX_KEYWORDS:
+        if kw in text_lower:
+            query = text_lower
+            for k in SANDBOX_KEYWORDS:
+                query = query.replace(k, "").strip()
+            return ("sandbox", query or text)
 
     # Search
     for kw in SEARCH_KEYWORDS:
@@ -427,6 +436,25 @@ async def execute_tools(text: str) -> tuple[str, str, str | None]:
         await orchestrator.submit_task(role_to_use, query, callback=swarm_callback)
         
         tool_context = f"\n\n## [AÇÃO EXECUTADA] A tarefa '{query}' foi delegada para a fila do Swarm com a persona '{role_to_use}'. Diga ao criador que a equipe está trabalhando nisso em background e avisará quando terminar."
+
+    elif intent == "sandbox" and query:
+        logger.info(f"☁️ Gerando código Python para a Sandbox E2B: {query}")
+        
+        # Pede pra LLM gerar o código python puro
+        code_prompt = f"Escreva APENAS código Python para a seguinte solicitação: {query}. O código deve ser self-contained e printar o resultado ou plotar gráficos se necessário. Não use blocos markdown (```python), apenas o código puro."
+        generated_code = await router.generate([{"role": "user", "content": code_prompt}], task_type="code", require_fast=True)
+        
+        # Limpa markers de markdown caso a LLM insista em enviar
+        if isinstance(generated_code, str):
+            generated_code = generated_code.replace("```python", "").replace("```", "").strip()
+            
+            # Carrega e aciona a Skill Oficial Declarativa
+            from skills.e2b_sandbox_skill import execute as e2b_execute
+            sandbox_result = await e2b_execute({"code": generated_code})
+            
+            tool_context = f"\n\n## [AÇÃO EXECUTADA] O código foi gerado e executado na Nuvem E2B.\n\nCódigo Python Executado:\n```python\n{generated_code}\n```\n\nOutput da Máquina Virtual:\n{sandbox_result}\n\nVocê deve encaminhar esse Output da Máquina Virtual (incluindo imagens base64 se houverem) em sua resposta."
+        else:
+            tool_context = f"\n\n## [ERRO] O CodeAgent falhou em escrever o código Python: {generated_code}"
 
     return tool_context, intent, query
 
