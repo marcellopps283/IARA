@@ -107,6 +107,7 @@ MAX_RETRIES_PER_TASK = 5         # Máximo de tentativas antes de pedir ajuda hu
 LLM_TIMEOUT_SECONDS = 60        # Timeout por chamada de LLM
 MAX_WORKING_MEMORY = 20         # Mensagens no working memory antes de compactar
 MAX_TOOL_CALLS_PER_TURN = 5     # Máximo de tools executadas por turno
+MAX_DAILY_LLM_CALLS = 150       # Quota diária máxima de disparos pro LLM Router (Kill Switch financeiro)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Swarm Orchestrator (Load Balancing & Anti-OOM)

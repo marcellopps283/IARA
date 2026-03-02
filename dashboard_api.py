@@ -145,24 +145,34 @@ async def get_config():
 
 @app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
-    tool_context, intent, query = await brain.execute_tools(request.text)
-    system_prompt = await brain.build_system_prompt()
-    conversation = await core.get_conversation()
-    messages = [
-        {"role": "system", "content": system_prompt + tool_context},
-        *conversation,
-        {"role": "user", "content": request.text},
-    ]
-    stream = brain.router.generate_stream(messages)
-
     async def event_generator():
-        full_response = ""
         try:
+            yield "data: [STATUS] Interpretando intenção via Brain...\n\n"
+            tool_context, intent, query = await brain.execute_tools(request.text)
+            
+            yield f"data: [STATUS] Intent detectada: [{intent.upper()}]\n\n"
+            yield "data: [THINKING] Consolidando contexto da memória e tools...\n\n"
+            
+            system_prompt = await brain.build_system_prompt()
+            conversation = await core.get_conversation()
+            messages = [
+                {"role": "system", "content": system_prompt + tool_context},
+                *conversation,
+                {"role": "user", "content": request.text},
+            ]
+            
+            yield "data: [STATUS] Inicializando LLM Router (Streaming)...\n\n"
+            stream = brain.router.generate_stream(messages)
+            
+            yield "data: [ANSWER]\n\n"
             async for chunk in stream:
-                full_response += chunk
                 yield f"data: {chunk}\n\n"
+                
+        except RuntimeError as re:
+            # Pega erros de cota do HITL Policy ou do router
+            yield f"data: [ERRO CRÍTICO] {str(re)}\n\n"
         except Exception as e:
-            yield f"data: ERRO {str(e)}\n\n"
+            yield f"data: [ERRO] {str(e)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

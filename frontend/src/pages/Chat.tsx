@@ -76,7 +76,15 @@ export default function Chat() {
                 for (const line of chunk.split('\n')) {
                     if (line.startsWith('data: ')) {
                         const data = line.slice(6);
-                        assistantMessage += data;
+
+                        if (data.startsWith('[STATUS]') || data.startsWith('[THINKING]') || data.startsWith('[ERRO')) {
+                            assistantMessage += `\n> ⚙️ \`${data}\`\n`;
+                        } else if (data.startsWith('[ANSWER]')) {
+                            assistantMessage += `\n\n`;
+                        } else {
+                            assistantMessage += data;
+                        }
+
                         setMessages((prev) => {
                             const newMessages = [...prev];
                             newMessages[newMessages.length - 1].content = assistantMessage;

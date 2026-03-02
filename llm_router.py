@@ -11,6 +11,7 @@ import random
 from typing import AsyncGenerator
 
 import aiohttp
+import datetime
 
 import config
 import hooks
@@ -19,6 +20,22 @@ logger = logging.getLogger("llm_router")
 
 # Limita requisições LLM simultâneas (evita bans por HTTP 429 Timeouts)
 _api_semaphore = asyncio.Semaphore(3)
+
+# Controle estrito de cota diária
+_daily_calls = 0
+_current_day = datetime.date.today()
+
+def check_and_increment_quota():
+    global _daily_calls, _current_day
+    today = datetime.date.today()
+    if today != _current_day:
+        _current_day = today
+        _daily_calls = 0
+        
+    if _daily_calls >= config.MAX_DAILY_LLM_CALLS:
+        raise RuntimeError(f"❌ [HITL POLICY] Cota diária estourada ({config.MAX_DAILY_LLM_CALLS} chamadas). Sistema bloqueado por segurança.")
+    
+    _daily_calls += 1
 
 
 class LLMRouter:
@@ -114,6 +131,8 @@ class LLMRouter:
         Gera uma resposta usando o provider mais adequado para a tarefa.
         Se falhar, faz fallback para o próximo da lista ordenada.
         """
+        check_and_increment_quota()
+        
         # Hook de Segurança (Red Team): Ofuscar chaves/tokens
         for m in messages:
             if isinstance(m.get("content"), str):
@@ -202,6 +221,8 @@ class LLMRouter:
         Gera resposta em streaming (token por token via SSE).
         Faz fallback automático se o provider falhar.
         """
+        check_and_increment_quota()
+        
         target_providers = self._sort_providers_for_task(task_type, False)
         last_error = None
 
