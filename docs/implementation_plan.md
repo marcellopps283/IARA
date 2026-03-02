@@ -84,5 +84,19 @@ O objetivo desta fase é abandonar as frágeis listas de keywords na detecção 
 **3. Inteligência Híbrida (brain.py)**
 - Criar nova pipe principal `classify_intent_with_tools(text, router)` invocando `router.generate` sob *require_fast=True*.
 - Tratar o dict gerado e rotear na mesma estrutura legada `("intent", query)` que já alimenta `execute_tools()`.
+- **Mapeamento Crítico (Tool → Intent)**: Como `execute_tools()` espera uma tupla legada, será implementado o seguinte conversor:
+  - `web_search`          → `("search",   args["query"])`
+  - `deep_research`       → `("deep_research", args["query"])`
+  - `save_memory`         → `("save_memory",   args["content"])`
+  - `recall_memory`       → `("recall_memory", None)`
+  - `get_weather`         → `("weather",  None)`
+  - `get_system_status`   → `("status",   None)`
+  - `set_reminder`        → `("reminder", args["message"] + " " + args["time_expression"])`
+  - `toggle_flashlight`   → `("flashlight", args["state"])`
+  - `get_location`        → `("location", None)`
+  - `read_url`            → `("url_read", args["url"])`
+  - `run_sandbox`         → `("sandbox",  args["task_description"])`
+  - `swarm_delegate`      → `("swarm",    args["task"])`
+  - `deep_research_council` → `("council", args["query"])`
 - Criar rotina formal de *Try/Except* que degrada a leitura para a função purista velha de `classify_intent()` garantindo retrocompatibilidade 100%.
 - Adicionar no bloco de comandos especiais o `/tools`, permitindo ver as descrições em tela do *tools_registry*.
