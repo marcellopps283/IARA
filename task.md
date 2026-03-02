@@ -34,35 +34,52 @@
 # NOVORUMO: Evolução V3 (A partir daqui)
 
 ## Fase 7: Visual Feedback (SSE Skeleton), Quota Limits & HITL Policy
-- [ ] **Esqueleto SSE**: Implementar base do FastAPI Server-Sent Events e refatorar React para escutar os yields (STATUS, THINKING, ANSWER) em formato debug textual estrito. Componentes bonitos renderizadores são atrasados pra UI final da Fase 12.
-- [ ] **Polícia de Cotas (Rate Limiter)**: Adicionar limite preventivo `MAX_DAILY_LLM_CALLS = 150` no `config.py` e barrar no nível do `llm_router.py` antes de arruinar o orçamento.
-- [ ] **Criação do Documento HITL**: Escrever formalmente o `IARA_HITL_POLICY.md` com 3 Níveis (Safe/Medium/High) para balizar matematicamente os disparos de aprovação do Telegram pro Conselho.
+- [x] **Esqueleto SSE**: Implementar base do FastAPI Server-Sent Events e refatorar React para escutar os yields (STATUS, THINKING, ANSWER) em formato debug textual estrito. Componentes bonitos renderizadores são atrasados pra UI final da Fase 12.
+- [x] **Polícia de Cotas (Rate Limiter)**: Adicionar limite preventivo `MAX_DAILY_LLM_CALLS = 150` no `config.py` e barrar no nível do `llm_router.py` antes de arruinar o orçamento.
+- [x] **Criação do Documento HITL**: Escrever formalmente o `IARA_HITL_POLICY.md` com 3 Níveis (Safe/Medium/High) para balizar matematicamente os disparos de aprovação do Telegram pro Conselho.
 
 ## Fase 8: Roteamento Escalável e Contexto Econômico (Fast vs Heavy)
-- [ ] Atualizar `classify_intent` para repassar `require_fast=True` ao router em chats normais.
-- [ ] Rotear requisições fast pro Groq.
-- [ ] Escalation Trigger: Ativar fallback pra modelos Reasoning (OpenRouter/R1) se timeout/failure no Groq bater 2 tentativas consecutivas OU intenção semântica forçalada por termos complexos for injetada no Prompt Mestre.
+- [x] Atualizar `classify_intent` para repassar `require_fast=True` ao router em chats normais.
+- [x] Rotear requisições fast pro Groq. Escalation Trigger: Ativar fallback pra modelos Reasoning (OpenRouter/R1) se timeout/failure no Groq bater 2 tentativas consecutivas OU intenção semântica forçalada por termos complexos for injetada no Prompt Mestre.
 
 ## Fase 9: Automação VPN Tailscale + Recuperação de Falhas
-- [ ] **Descoberta Dinâmica de IP**: Criar script inicial para bater na API Rest do Tailscale devolvendo o IP `100.x` do Worker usando hostname constante.
-- [ ] **Teste Inicial de Conexão Obrigatório**: Ping e SSH test para validar a interface. O Agent **NUNCA DEVERÁ** codar o setup de Worker.py sem rodar independentemente este script terminal primeiro.
-- [ ] Autenticar chamadas inter-agentes no `worker_protocol.py` utilizando o IP dinâmico validado.
-- [ ] **Redundância Híbrida**: Adicionar File Transfer físico (SCP) ao wrapper de conexão SSH no `worker_protocol.py`.
-- [ ] **Recuperação de Amnésia**: Master lê `in_progress` da DB ao resetar via polling no `on_session_start` caçando tarefas órfãs abandonadas no S21.
-- [ ] Kill Switch remetente: `/api/kill` propaga cancelamentos pro Android Escravo.
+- [x] **Descoberta Dinâmica de IP**: Criar script inicial para bater na API Rest do Tailscale devolvendo o IP `100.x` do Worker usando hostname constante.
+- [x] **Integração no Protocolo**: Conectar o script de descoberta ao `worker_protocol.py` da IARA para que, em caso de erro, ao invés de desistir, tente se reconectar ao Tailscale do Moto G4 ou S21 FE antes de fail.
+- [x] **ZeroMQ Heartbeat**: Implementar envio explícito de ping no `transport.py` do Worker pra manter a comunicação TCP resiliente caso o Wi-Fi do host pisque.
+- [x] **Redundância Híbrida**: Adicionar File Transfer físico (SCP) ao wrapper de conexão SSH no `worker_protocol.py`.
+- [x] **Recuperação de Amnésia**: Master lê `in_progress` da DB ao resetar via polling no `on_session_start` caçando tarefas órfãs abandonadas no S21.
+- [x] Kill Switch remetente: `/api/kill` propaga cancelamentos pro Android Escravo.
 
 ## Fase 10: Conselho Expandido (Blue/Red Team Distribuídos)
-- [ ] Nova intenção `council` disparando `asyncio.gather` em provedores multi-modal (Groq, Cerebras, Kimi) consolidando com modelo Presidente.
-- [ ] Lock do Conselho a 3 tentativas, balizado pelo `IARA_HITL_POLICY.md`.
-- [ ] Lock do Blue Team S21 FE rejeitando perigos de sistema, com bail-out após 2 tentativas pro Telegram.
+- [x] Nova intenção `council` disparando `asyncio.gather` em provedores multi-modal (Groq, Cerebras, Mistral) consolidando com modelo Presidente.
+- [x] Lock do Conselho a 3 tentativas, balizado pelo `IARA_HITL_POLICY.md`.
+- [x] Lock do Blue Team S21 FE rejeitando perigos de sistema, com bail-out após 2 tentativas pro Telegram.
 
 ## Fase 11: Sandbox Absoluta (Decision WASM vs E2B Híbrida)
-- [ ] Integrar extensão remota de nuvem robusta através da API E2B SDK.
-- [ ] Abordagem Mista confirmada: Execuções nativas WASM ou Python puristas rodam na localidade; E2B isola workloads que drenam ciclos do hardware (Carga + ML).
-- [ ] **Pipeline de Entrega**: Extrair arquivos e charts contidos no Cloud do E2B fazendo a descida local para o frontend SSE servir os buffers através da UI.
+- [x] Integrar extensão remota de nuvem robusta através da API E2B SDK.
+- [x] Abordagem Mista confirmada: Execuções nativas WASM ou Python puristas rodam na localidade; E2B isola workloads que drenam ciclos do hardware (Carga + ML).
+- [x] **Pipeline de Entrega**: Extrair arquivos e charts contidos no Cloud do E2B fazendo a descida local para o frontend SSE servir os buffers através da UI.
 
 ## Fase 12: Memória Contextual Orientada a Objeto (Full Stack Projects)
-- [ ] Backend: SQLite FTS5 / Cohere Embeddings amarrados ao `project_id`.
-- [ ] Retrieval: Na chegada do Prompt, o `brain.py` gera cossine query embeddings em real-time e recupera os TOP-K compatíveis injetando silenciosamente via System. 
-- [ ] Frontend: Expor um endpoint `/api/projects`.
-- [ ] Frontend React: Modificar Header do dashboard montando `<Select>` para troca passiva do projeto base.
+- [x] **Etapa 1: Project Isolation**
+  - [x] DB (core.py): Criar tabelas `projects` e `app_config` (`active_project_id`).
+  - [x] DB (core.py): Adicionar coluna `project_id DEFAULT NULL` nas tabelas `history`, `core_memory`, `episodic_memory`. (NULL = Escopo Global).
+  - [x] Core (`brain.py`): Ler `active_project_id` em `process_message()`.
+  - [x] Core (`core.py` Refactor Massivo): Alterar `save_message`, `get_conversation`, `save_core_fact`, `get_core_memory`, `compact_working_memory` e `save_episode` para injetar/filtrar o `project_id`.
+  - [x] Telegram: Handler `/projeto [nome]` para criar/ativar escopos e gravar na `app_config`.
+  - [x] Web: Endpoints `GET /api/projects` e `POST /api/projects/activate/{id}`.
+  - [x] Web: Componente `<ProjectSelector>` no React Dashboard.
+- [x] **Etapa 2: Semantic RAG**
+  - [x] Embeddings: Geração Cohere assíncrona guardando BLOB nas tabelas `core_memory` e `episodic_memory`.
+  - [x] RAG: Cosine Similarity sobre `episodic_memory` filtrada, limitando a injeção ao TOP-3 episódios no prompt de sistema.
+
+## Fase 13: Function Calling (Tool Use Formal)
+- [ ] **Etapa 1: Tool Registry Centralizado**
+  - [ ] Criar arquivo `tools_registry.py` formalizando schemas JSON (OpenAI format) para 13 tools nativas.
+- [ ] **Etapa 2: LLM Router Refactor**
+  - [ ] Habilitar kwargs `{tools, tool_choice}` no dispatcher `router.generate()`.
+  - [ ] Parsear field `tool_calls` quando injetado pelo provider, retornando mapping simples.
+- [ ] **Etapa 3: Integração Híbrida no Brain**
+  - [ ] Desenvolver `classify_intent_with_tools` chamando modelo rápido (`require_fast=True`).
+  - [ ] Implementar Sandbox Try/Except forçando callback p/ regex legado de keywords se houver falha de provider.
+  - [ ] Integrar handler `/tools` listando catálogo online.
