@@ -91,6 +91,14 @@ CYBER_HANDS_KEYWORDS = [
     "localizacao", "onde nós estamos", "gps", "coordenadas",
 ]
 
+# Verbos e Termos que engatilham a Complexidade Semântica (Escalation pro R1)
+REASONING_KEYWORDS = [
+    "aprofunde", "aprofunda", "detalha", "detalhe", "explique detalhadamente",
+    "refatora", "refatore", "analisa criticamente", "analise criticamente",
+    "pense passo a passo", "pense bem", "complexo", "crie uma arquitetura",
+    "avalie as opções", "pense como especialista"
+]
+
 # Regex para detectar URLs
 URL_REGEX = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+')
 
@@ -179,7 +187,7 @@ async def classify_intent(text: str, router: LLMRouter) -> tuple[str, str | None
                 "Responda só a palavra."
             )},
             {"role": "user", "content": text},
-        ], temperature=0.0)
+        ], temperature=0.0, require_fast=True)
 
         if isinstance(classification, str) and "SEARCH" in classification.upper():
             logger.info(f"🤖 LLM classificou como SEARCH: {text[:50]}")
@@ -595,7 +603,16 @@ async def process_message(text: str, message):
         *conversation,
     ]
 
-    stream = router.generate_stream(messages)
+    # Fase 8: Definição Semântica e Escalation Trigger
+    task_type_call = "chat"
+    req_fast = True
+    
+    if any(w in text_lower for w in REASONING_KEYWORDS):
+        task_type_call = "reasoning"
+        req_fast = False
+        await telegram_bot.send_channel_message(chat_id, "🧠 Escalando para DeepSeek R1 (OpenRouter) por complexidade semântica detectada...", channel="commentary")
+
+    stream = router.generate_stream(messages, task_type=task_type_call, require_fast=req_fast)
     full_response = await telegram_bot.send_streaming_response(
         chat_id, stream, reply_to=message.message_id
     )

@@ -63,8 +63,8 @@ class LLMRouter:
         if not self.providers:
             raise RuntimeError("❌ Nenhum provider de LLM configurado! Verifique o .env")
 
-    def _sort_providers_for_task(self, task_type: str, requires_tools: bool) -> list[dict]:
-        """Ordena os provedores disponíveis baseando-se no tipo de tarefa e necessidade de tools."""
+    def _sort_providers_for_task(self, task_type: str, requires_tools: bool, require_fast: bool = False) -> list[dict]:
+        """Ordena os provedores disponíveis baseando-se no tipo de tarefa, fallback e need for speed."""
         sorted_provs = []
         
         # Filtrar suporte a tools primeiro
@@ -88,31 +88,36 @@ class LLMRouter:
             name = p["name"].lower()
             score = 0
             
-            if task_type in ("intent", "consolidation", "chat_fast"):
-                if name.startswith("cerebras"): score = 10     # Cerebras é ideal pra tasks rápidas sem reasoning
-                elif name.startswith("groq"): score = 5        # Groq é o 2o mais rápido
-                
-            elif task_type == "reasoning":
-                # R1 reina em reasoning absoluto. (Sem tools)
+            if task_type == "reasoning":
+                # R1 reina em reasoning absoluto.
                 if name == "openrouter": score = 10
                 elif name.startswith("groq"): score = 8
                 
+            elif require_fast or task_type in ("intent", "consolidation", "chat_fast"):
+                # Groq absoluto para fast. Se falhar as retries, o next na lista será OpenRouter.
+                if name.startswith("groq"): score = 10
+                elif name.startswith("cerebras"): score = 9
+                elif name == "openrouter": score = 5 # Escalation fallback (DeepSeek R1)
+                elif name == "gemini": score = 4
+                
             elif task_type in ("code", "plan"):
-                # R1 NUNCA deve cair aqui pois não suporta Tools, tarefas de plano/codigo do arquitet dependem de tools.
                 if name.startswith("groq"): score = 10
                 elif name == "gemini": score = 8
-                elif name == "mistral": score = 6              # Mistral Large como ótimo fallback pra code/tools
+                elif name == "mistral": score = 6              # Mistral Large como fallback
+                elif name == "openrouter": score = 4           # Caso tools não importem tanto e a lógica falhe
                 
             elif task_type == "research":
                 if name == "kimi": score = 10         # Bom para lidar com grandes contextos
                 elif name.startswith("groq"): score = 8
                 elif name == "gemini": score = 7
+                elif name == "openrouter": score = 6
                 
             else: # "chat", "tools" e tarefas gerais
                 if name.startswith("groq"): score = 10
                 elif name == "gemini": score = 8
-                elif name == "mistral": score = 7
-                elif name == "kimi": score = 6
+                elif name == "openrouter": score = 7
+                elif name == "mistral": score = 6
+                elif name == "kimi": score = 5
                 
             sorted_provs.append((score, p))
             
@@ -126,6 +131,7 @@ class LLMRouter:
         tools: list[dict] | None = None,
         temperature: float = 0.7,
         task_type: str = "chat",
+        require_fast: bool = False,
     ) -> str | dict:
         """
         Gera uma resposta usando o provider mais adequado para a tarefa.
@@ -139,7 +145,7 @@ class LLMRouter:
                 m["content"] = await hooks.before_submit_prompt(m["content"])
 
         last_error = None
-        target_providers = self._sort_providers_for_task(task_type, bool(tools))
+        target_providers = self._sort_providers_for_task(task_type, bool(tools), require_fast=require_fast)
 
         for provider in target_providers:
             try:
@@ -166,7 +172,7 @@ class LLMRouter:
                 url = f"{provider['base_url']}/chat/completions"
                 timeout = aiohttp.ClientTimeout(total=config.LLM_TIMEOUT_SECONDS)
 
-                max_retries = 3
+                max_retries = 2
                 for attempt in range(max_retries):
                     async with _api_semaphore:
                         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -216,6 +222,7 @@ class LLMRouter:
         messages: list[dict],
         temperature: float = 0.7,
         task_type: str = "chat",
+        require_fast: bool = False,
     ) -> AsyncGenerator[str, None]:
         """
         Gera resposta em streaming (token por token via SSE).
@@ -223,7 +230,7 @@ class LLMRouter:
         """
         check_and_increment_quota()
         
-        target_providers = self._sort_providers_for_task(task_type, False)
+        target_providers = self._sort_providers_for_task(task_type, False, require_fast=require_fast)
         last_error = None
 
         # Hook de Segurança (Red Team): Ofuscar chaves/tokens
