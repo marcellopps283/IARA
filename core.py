@@ -6,9 +6,11 @@ Gerencia toda a persistência de estado da Kitty via SQLite.
 import aiosqlite
 import json
 import logging
+import asyncio
 from datetime import datetime
 
 import config
+import embeddings
 
 logger = logging.getLogger("core")
 
