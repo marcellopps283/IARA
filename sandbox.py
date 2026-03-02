@@ -50,7 +50,7 @@ async def run_in_sandbox(python_code: str, timeout: int = 15):
                         "-r", str(temp_path), 
                         "-b", f"{termux_usr}:{termux_usr}", # Leva interpretador junto
                         "-w", "/", # Fixa o dir de trabalho dentro da jaula
-                        termux_python, "sandbox_eval.py"
+                        termux_python, "/sandbox_eval.py"
                     ]
 
                 try:
