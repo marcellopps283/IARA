@@ -10,10 +10,14 @@ class TransportServer:
     - O 'Heavy Worker' (S21 FE) deve ser iniciado rodando este server na porta 5556.
     - O 'Light Worker' (Moto G4 Harpia) deve ser iniciado rodando este server na porta 5558.
     """
-    def __init__(self, port=5556):
         self.port = port
         self.ctx = zmq.asyncio.Context()
         self.socket = self.ctx.socket(zmq.REP)
+        
+        # ZeroMQ Heartbeat Pings (Manter conexão resiliente caso o Wifi pisque)
+        self.socket.setsockopt(zmq.TCP_KEEPALIVE, 1)
+        self.socket.setsockopt(zmq.TCP_KEEPALIVE_IDLE, 10)
+        self.socket.setsockopt(zmq.TCP_KEEPALIVE_INTVL, 5)
         
     async def start(self, message_handler):
         self.socket.bind(f"tcp://0.0.0.0:{self.port}")
@@ -48,6 +52,12 @@ class TransportClient:
         key = f"{ip}:{port}"
         if key not in self.sockets:
             sock = self.ctx.socket(zmq.REQ)
+            
+            # ZeroMQ Heartbeat (Resiliência do client)
+            sock.setsockopt(zmq.TCP_KEEPALIVE, 1)
+            sock.setsockopt(zmq.TCP_KEEPALIVE_IDLE, 10)
+            sock.setsockopt(zmq.TCP_KEEPALIVE_INTVL, 5)
+            
             # Timeout importante para o S21 Ultra não prender a thead se o FE sumir do mDNS
             sock.setsockopt(zmq.RCVTIMEO, 15000) 
             sock.connect(f"tcp://{ip}:{port}")

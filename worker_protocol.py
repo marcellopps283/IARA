@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import tailscale_discovery
 
 logger = logging.getLogger("worker_protocol")
 
@@ -91,6 +92,7 @@ async def delegate(host: str, task: dict, timeout: int = 60) -> dict:
                 "ssh", 
                 "-o", "ServerAliveInterval=15",
                 "-o", "ServerAliveCountMax=3",
+                "-o", "StrictHostKeyChecking=no",  # crucial when IP changes
                 host, "python", "~/IaraWorker/run_task.py",
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -103,9 +105,50 @@ async def delegate(host: str, task: dict, timeout: int = 60) -> dict:
         )
 
         if proc.returncode != 0:
-            error_msg = stderr.decode("utf-8", errors="replace")[:500]
-            logger.error(f"❌ Worker {host} erro: {error_msg}")
-            return {"error": f"Worker falhou: {error_msg}"}
+            error_msg = stderr.decode("utf-8", errors="replace")
+            # --- INCÍCIO DO TAILSCALE FALLBACK ---
+            logger.warning(f"⚠️ SSH '{host}' falhou. Código {proc.returncode}. Puxando Tailscale Discovery...")
+            
+            # Se a string host for o nome original (ex S21FE), tentamos achar o IP da tailnet
+            # Se quisermos, iteramos pelo _workers pra achar a key real pra jogar no CLI
+            target_hostname = host
+            for name, info in _workers.items():
+                if info["host"] == host: target_hostname = name
+                
+            new_ip = await tailscale_discovery.get_tailscale_ip(target_hostname)
+            
+            if new_ip and new_ip != host:
+                logger.info(f"🔄 Magia do Tailscale! Rota nova recuperada: {new_ip}. Retentando...")
+                # Atualizar registry global 
+                for name, info in _workers.items():
+                    if info["host"] == host:
+                        info["host"] = new_ip
+                        
+                proc2 = await asyncio.create_subprocess_exec(
+                    "ssh", 
+                    "-o", "ServerAliveInterval=15",
+                    "-o", "ServerAliveCountMax=3",
+                    "-o", "StrictHostKeyChecking=no",
+                    new_ip, "python", "~/IaraWorker/run_task.py",
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                
+                stdout, stderr = await asyncio.wait_for(
+                    proc2.communicate(input=task_json.encode("utf-8")),
+                    timeout=timeout,
+                )
+                
+                if proc2.returncode != 0:
+                    final_err = stderr.decode("utf-8", errors="replace")[:500]
+                    logger.error(f"❌ Worker no IP '{new_ip}' falhou em definitivo: {final_err}")
+                    return {"error": f"Worker falhou mesmo na rota tailscale: {final_err}"}
+                    
+            else:
+                logger.error(f"❌ Worker {host} erro: {error_msg[:500]}")
+                return {"error": f"Worker falhou: {error_msg[:500]}"}
+            # --- FIM DO TAILSCALE FALLBACK ---
 
         result_text = stdout.decode("utf-8", errors="replace").strip()
 
@@ -120,13 +163,12 @@ async def delegate(host: str, task: dict, timeout: int = 60) -> dict:
         logger.error(f"⏰ Worker {host} timeout ({timeout}s)")
         return {"error": f"Worker timeout após {timeout}s"}
     except Exception as e:
-        logger.error(f"❌ Falha SSH para {host}: {e}")
-        # Marcar worker como offline
+        logger.error(f"❌ Falha no despachante SSH para {host}: {e}")
         for name, info in _workers.items():
             if info["host"] == host:
                 info["online"] = False
-                logger.warning(f"🔴 Worker {name} marcado offline")
-        return {"error": f"SSH falhou: {str(e)[:200]}"}
+                logger.warning(f"🔴 Worker {name} marcado offline devida a grande falha.")
+        return {"error": f"Exceção catastrófica de despachante SSH: {str(e)[:200]}"}
 
 
 
