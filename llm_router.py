@@ -114,6 +114,12 @@ class LLMRouter:
         Gera uma resposta usando o provider mais adequado para a tarefa.
         Se falhar, faz fallback para o próximo da lista ordenada.
         """
+        import hooks
+        # Hook de Segurança (Red Team): Ofuscar chaves/tokens
+        for m in messages:
+            if isinstance(m.get("content"), str):
+                m["content"] = await hooks.before_submit_prompt(m["content"])
+
         last_error = None
         target_providers = self._sort_providers_for_task(task_type, bool(tools))
 
