@@ -37,6 +37,12 @@ import orchestrator
 # Intent Detection — classifica o que o Criador quer
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+INTENT_CHAT = "chat"
+INTENT_TOOL = "tool"
+INTENT_RESEARCH = "deep_research"
+INTENT_IGNORE = "ignore"
+INTENT_COUNCIL = "council"
+
 SEARCH_KEYWORDS = [
     "pesquisa", "pesquisar", "busca", "buscar", "procura", "procurar",
     "search", "google", "qual o preço", "quanto custa",
@@ -98,6 +104,8 @@ REASONING_KEYWORDS = [
     "pense passo a passo", "pense bem", "complexo", "crie uma arquitetura",
     "avalie as opções", "pense como especialista"
 ]
+
+COUNCIL_KEYWORDS = ["conselho", "opinões", "debate", "reunião", "votação", "analisem", "perspectivas"]
 
 # Regex para detectar URLs
 URL_REGEX = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+')
@@ -168,6 +176,14 @@ async def classify_intent(text: str, router: LLMRouter) -> tuple[str, str | None
                 return ("flashlight", "on" if is_on else "off")
             elif any(w in text_lower for w in ["onde", "localização", "localizacao", "gps", "coordenadas"]):
                 return ("location", None)
+
+    # Council
+    for kw in COUNCIL_KEYWORDS:
+        if kw in text_lower:
+            query = text_lower
+            for k in COUNCIL_KEYWORDS:
+                query = query.replace(k, "").strip()
+            return (INTENT_COUNCIL, query or text)
 
     # Search
     for kw in SEARCH_KEYWORDS:
@@ -581,6 +597,48 @@ async def process_message(text: str, message):
         await telegram_bot.send_channel_message(chat_id, plan_msg, channel="final")
         await core.save_message("assistant", plan_msg)
         return  # Aguarda resposta do usuário
+
+    if intent == INTENT_COUNCIL:
+        logger.info(f"⚖️ Iniciando Conselho Expandido para: {query}")
+        await telegram_bot.send_channel_message(chat_id, "⚖️ Convocando Conselho Multi-Modal (Groq, Cerebras, Mistral)...", channel="commentary")
+        
+        system_prompt = await build_system_prompt()
+        conversation = await core.get_conversation()
+        base_messages = [
+            {"role": "system", "content": system_prompt + tool_context},
+            *conversation,
+            {"role": "user", "content": query},
+        ]
+        
+        # Função para buscar opinião de um provedor
+        async def fetch_council(provider_name):
+            try:
+                result = await router.generate(base_messages, task_type="chat", require_fast=True, force_provider=provider_name)
+                return f"### Opinião [{provider_name.upper()}]:\n{result}"
+            except Exception as e:
+                return f"### Opinião [{provider_name.upper()}] falhou:\n{e}"
+                
+        # Substitui kimi se quisermos fast gen com openweights
+        providers = ["groq", "cerebras", "mistral"] 
+        tasks = [fetch_council(p) for p in providers]
+        
+        responses = await asyncio.gather(*tasks)
+        council_output = "\n\n".join(responses)
+        
+        await telegram_bot.send_channel_message(chat_id, "🏛️ Conselho finalizado. Sintetizando veredicto Presidencial (OpenRouter/R1 ou Groq)...", channel="commentary")
+        
+        president_messages = [
+            {"role": "system", "content": system_prompt + "\nVocê é a Consciência Presidencial (Líder do Conselho de I.A). O Criador fez uma pergunta complexa e acionou a Reunião Distribuída. Leia as opiniões conflitantes/divergentes abaixo dos seus conselheiros e crie UM ÚNICO veredicto ou resposta final unificada. Aponte e cite as melhores ideias de cada conselheiro se forem válidas."},
+            {"role": "user", "content": f"Pergunta original do Criador: {query}\n\n{council_output}"}
+        ]
+        
+        stream = router.generate_stream(president_messages, task_type="reasoning", require_fast=False)
+        full_response = await telegram_bot.send_streaming_response(
+            chat_id, stream, reply_to=message.message_id if message else None
+        )
+        if full_response:
+            await core.save_message("assistant", full_response)
+        return
 
     # 4. Montar contexto e streaming
     system_prompt = await build_system_prompt()

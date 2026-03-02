@@ -132,6 +132,7 @@ class LLMRouter:
         temperature: float = 0.7,
         task_type: str = "chat",
         require_fast: bool = False,
+        force_provider: str | None = None,
     ) -> str | dict:
         """
         Gera uma resposta usando o provider mais adequado para a tarefa.
@@ -146,6 +147,12 @@ class LLMRouter:
 
         last_error = None
         target_providers = self._sort_providers_for_task(task_type, bool(tools), require_fast=require_fast)
+        if force_provider:
+            forced = [p for p in self.providers if p["name"] == force_provider]
+            if forced:
+                target_providers = forced
+            else:
+                logger.warning(f"⚠️ Provider '{force_provider}' não configurado. Ignorando force.")
 
         for provider in target_providers:
             try:
@@ -223,6 +230,7 @@ class LLMRouter:
         temperature: float = 0.7,
         task_type: str = "chat",
         require_fast: bool = False,
+        force_provider: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """
         Gera resposta em streaming (token por token via SSE).
@@ -231,6 +239,13 @@ class LLMRouter:
         check_and_increment_quota()
         
         target_providers = self._sort_providers_for_task(task_type, False, require_fast=require_fast)
+        if force_provider:
+            forced = [p for p in self.providers if p["name"] == force_provider]
+            if forced:
+                target_providers = forced
+            else:
+                logger.warning(f"⚠️ Provider '{force_provider}' não configurado. Ignorando force.")
+                
         last_error = None
 
         # Hook de Segurança (Red Team): Ofuscar chaves/tokens

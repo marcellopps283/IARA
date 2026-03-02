@@ -16,6 +16,14 @@ async def worker_handler(payload):
     if payload.get("type") == "execute_code":
         code = payload.get("code")
         language = payload.get("language")
+        
+        # --- RED/BLUE TEAM HOOK ---
+        dangerous_keywords = ["rm -rf", "mkfs", "dd ", "> /dev/sda", "chmod 777 -R /", "poweroff", "os.system('rm", "subprocess.call(['rm'"]
+        code_lower = str(code).lower()
+        if any(k in code_lower for k in dangerous_keywords):
+            print("🛡️ [Blue Team] Execução bloqueada por risco crítico!")
+            return {"status": "error", "error_type": "Blue_Team_Rejection", "traceback": "[Red Team Alert] Critical system danger detected. Script blocked by Android Shield."}
+
         print(f"🧪 Executando código {language} em ambiente estéril (Sandbox)...")
         
         if language == "python":
@@ -33,7 +41,7 @@ async def worker_handler(payload):
             
             # Usando uma LLM gratuita da HF Inference API para o Worker pensar sozinho
             model = HfApiModel(model_id="Qwen/Qwen2.5-Coder-32B-Instruct")
-            agent = CodeAgent(tools=[DuckDuckGoSearchTool()], model=model)
+            agent = CodeAgent(tools=[DuckDuckGoSearchTool()], model=model, max_steps=3)
             
             def _run_agent():
                 return agent.run(objective)
