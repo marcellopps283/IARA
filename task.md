@@ -34,17 +34,18 @@
 # NOVORUMO: Evolução V3 (A partir daqui)
 
 ## Fase 7: Visual Feedback (SSE Skeleton), Quota Limits & HITL Policy
-- [ ] **Esqueleto SSE**: Implementar base do FastAPI Server-Sent Events e refatorar React para escutar os yields (STATUS, THINKING, ANSWER) no backend de forma que as fases futuras tenham um visual terminal debugger.
+- [ ] **Esqueleto SSE**: Implementar base do FastAPI Server-Sent Events e refatorar React para escutar os yields (STATUS, THINKING, ANSWER) em formato debug textual estrito. Componentes bonitos renderizadores são atrasados pra UI final da Fase 12.
 - [ ] **Polícia de Cotas (Rate Limiter)**: Adicionar limite preventivo `MAX_DAILY_LLM_CALLS = 150` no `config.py` e barrar no nível do `llm_router.py` antes de arruinar o orçamento.
 - [ ] **Criação do Documento HITL**: Escrever formalmente o `IARA_HITL_POLICY.md` com 3 Níveis (Safe/Medium/High) para balizar matematicamente os disparos de aprovação do Telegram pro Conselho.
 
 ## Fase 8: Roteamento Escalável e Contexto Econômico (Fast vs Heavy)
 - [ ] Atualizar `classify_intent` para repassar `require_fast=True` ao router em chats normais.
-- [ ] Rotear requisições fast pro Groq, permitindo fallbacks e escalate pra modelos Reasoning (OpenRouter/R1) em caso de refatoração ou erro.
+- [ ] Rotear requisições fast pro Groq.
+- [ ] Escalation Trigger: Ativar fallback pra modelos Reasoning (OpenRouter/R1) se timeout/failure no Groq bater 2 tentativas consecutivas OU intenção semântica forçalada por termos complexos for injetada no Prompt Mestre.
 
 ## Fase 9: Automação VPN Tailscale + Recuperação de Falhas
-- [ ] **Descoberta Dinâmica de IP**: Criar script inicial para bater na API Rest do Tailscale devolvendo o IP `100.x` do Worker usando hostname constante, livrando o Master de lidar com reset de IPs.
-- [ ] **Teste de Conexão**: Ping e SSH test para validar a interface.
+- [ ] **Descoberta Dinâmica de IP**: Criar script inicial para bater na API Rest do Tailscale devolvendo o IP `100.x` do Worker usando hostname constante.
+- [ ] **Teste Inicial de Conexão Obrigatório**: Ping e SSH test para validar a interface. O Agent **NUNCA DEVERÁ** codar o setup de Worker.py sem rodar independentemente este script terminal primeiro.
 - [ ] Autenticar chamadas inter-agentes no `worker_protocol.py` utilizando o IP dinâmico validado.
 - [ ] **Redundância Híbrida**: Adicionar File Transfer físico (SCP) ao wrapper de conexão SSH no `worker_protocol.py`.
 - [ ] **Recuperação de Amnésia**: Master lê `in_progress` da DB ao resetar via polling no `on_session_start` caçando tarefas órfãs abandonadas no S21.
@@ -58,8 +59,10 @@
 ## Fase 11: Sandbox Absoluta (Decision WASM vs E2B Híbrida)
 - [ ] Integrar extensão remota de nuvem robusta através da API E2B SDK.
 - [ ] Abordagem Mista confirmada: Execuções nativas WASM ou Python puristas rodam na localidade; E2B isola workloads que drenam ciclos do hardware (Carga + ML).
+- [ ] **Pipeline de Entrega**: Extrair arquivos e charts contidos no Cloud do E2B fazendo a descida local para o frontend SSE servir os buffers através da UI.
 
 ## Fase 12: Memória Contextual Orientada a Objeto (Full Stack Projects)
 - [ ] Backend: SQLite FTS5 / Cohere Embeddings amarrados ao `project_id`.
+- [ ] Retrieval: Na chegada do Prompt, o `brain.py` gera cossine query embeddings em real-time e recupera os TOP-K compatíveis injetando silenciosamente via System. 
 - [ ] Frontend: Expor um endpoint `/api/projects`.
 - [ ] Frontend React: Modificar Header do dashboard montando `<Select>` para troca passiva do projeto base.
