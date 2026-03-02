@@ -161,8 +161,18 @@ async def chat_endpoint(request: ChatRequest):
                 {"role": "user", "content": request.text},
             ]
             
+            yield "data: [STATUS] Avaliando Complexidade Semântica...\n\n"
+            task_type_call = "chat"
+            req_fast = True
+            text_lower = request.text.lower()
+            
+            if any(w in text_lower for w in brain.REASONING_KEYWORDS):
+                task_type_call = "reasoning"
+                req_fast = False
+                yield "data: [THINKING] Escalando para DeepSeek R1 por complexidade semântica explícita...\n\n"
+                
             yield "data: [STATUS] Inicializando LLM Router (Streaming)...\n\n"
-            stream = brain.router.generate_stream(messages)
+            stream = brain.router.generate_stream(messages, task_type=task_type_call, require_fast=req_fast)
             
             yield "data: [ANSWER]\n\n"
             async for chunk in stream:
