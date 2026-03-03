@@ -207,7 +207,15 @@ class LLMRouter:
 
                                 # Se o modelo quer chamar tools
                                 if choice.get("finish_reason") == "tool_calls" or message.get("tool_calls"):
-                                    return message  # Retorna o dict completo
+                                    tool_call = message.get("tool_calls", [{}])[0]
+                                    func = tool_call.get("function", {})
+                                    name = func.get("name")
+                                    args_str = func.get("arguments", "{}")
+                                    try:
+                                        args = json.loads(args_str)
+                                    except Exception:
+                                        args = {}
+                                    return {"tool": name, "args": args}
 
                                 return message.get("content", "")
 

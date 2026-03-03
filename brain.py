@@ -21,6 +21,7 @@ logger = logging.getLogger("brain")
 
 import config
 import core
+import tools_registry
 import web_search
 import deep_research
 import doc_reader
@@ -223,6 +224,61 @@ async def classify_intent(text: str, router: LLMRouter) -> tuple[str, str | None
     return ("chat", None)
 
 
+async def classify_intent_with_tools(text: str, router: LLMRouter) -> tuple[str, str | None]:
+    """
+    Tenta classificar o intent usando OpenAI Function Calling.
+    Se o provider falhar ou devolver texto comum, levanta exceção para acionar fallback.
+    """
+    messages = [
+        {"role": "system", "content": "Você é o núcleo de classificação de comandos da IARA. Seu trabalho é ler a intenção do usuário e invocar a ferramenta mais adequada. Se for papo furado ou nenhuma tool se encaixar perfeitamente, não chame tools, apenas retorne texto vazio."},
+        {"role": "user", "content": text}
+    ]
+    
+    response = await router.generate(
+        messages=messages,
+        tools=tools_registry.TOOLS_REGISTRY,
+        task_type="tools",
+        require_fast=True  # Preferência Groq
+    )
+    
+    if isinstance(response, dict) and "tool" in response:
+        tool = response["tool"]
+        args = response.get("args", {})
+        
+        # Mapeamento Crítico Tool → Intent legado
+        if tool == "web_search":
+            return ("search", args.get("query"))
+        elif tool == "deep_research":
+            return ("deep_research", args.get("query"))
+        elif tool == "save_memory":
+            return ("save_memory", args.get("content"))
+        elif tool == "recall_memory":
+            return ("recall_memory", None)
+        elif tool == "get_weather":
+            return ("weather", None)
+        elif tool == "get_system_status":
+            return ("status", None)
+        elif tool == "set_reminder":
+            msg = args.get("message", "")
+            time_expr = args.get("time_expression", "")
+            return ("reminder", f"{msg} {time_expr}".strip())
+        elif tool == "toggle_flashlight":
+            return ("flashlight", args.get("state"))
+        elif tool == "get_location":
+            return ("location", None)
+        elif tool == "read_url":
+            return ("url_read", args.get("url"))
+        elif tool == "run_sandbox":
+            return ("sandbox", args.get("task_description"))
+        elif tool == "swarm_delegate":
+            return ("swarm", args.get("task"))
+        elif tool == "deep_research_council":
+            return ("council", args.get("query"))
+            
+    # Se não retornou dicionário de tool válida, acionamos um TypeError para o fallback entrar em ação
+    raise ValueError("Nenhuma tool explícita foi invocada pelo LLM.")
+
+
 def parse_reminder_time(text: str) -> tuple[str, datetime | None]:
     """
     Extrai duração/horário do texto do reminder.
@@ -360,8 +416,16 @@ INJEÇÃO DE MEMÓRIA (4 CAMADAS SEMÂNTICAS)
 
 async def execute_tools(text: str) -> tuple[str, str, str | None]:
     """Classifica a intenção e executa a tool correspondente, retornando o contexto. Retorna (tool_context, intent, query)."""
-    intent, query = await classify_intent(text, router)
-    logger.info(f"🎯 Intent: {intent} | Query: {query}")
+    
+    try:
+        # Tenta Function Calling primeiro
+        intent, query = await classify_intent_with_tools(text, router)
+        logger.info(f"🎯 Intent (Tool Use): {intent} | Query: {query}")
+    except Exception as e:
+        # Fallback silencioso pro regex legado (Cerebras ou falhas)
+        logger.debug(f"⚠️ Tool Use falhou ({e}), acionando Fallback Keywords...")
+        intent, query = await classify_intent(text, router)
+        logger.info(f"🎯 Intent (Keywords): {intent} | Query: {query}")
 
     tool_context = ""
 
@@ -579,6 +643,15 @@ async def process_message(text: str, message):
             msg += f"Em progresso: #{active['id']} - {active['description']}\n" if active else "Em progresso: Nenhuma\n"
             msg += "\nComandos: `/task add [desc]`, `/task start [id]`, `/task done [id]`"
             await telegram_bot.send_simple_message(chat_id, msg)
+        return
+
+    # Tools Catalog
+    elif text_lower == "/tools":
+        msg = "🛠️ **Catálogo de Ferramentas Ativas (Function Calling):**\n\n"
+        for t in tools_registry.TOOLS_REGISTRY:
+            f = t["function"]
+            msg += f"- **{f['name']}**: {f['description']}\n"
+        await telegram_bot.send_simple_message(chat_id, msg)
         return
 
     # Plan Mode Lock
