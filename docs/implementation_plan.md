@@ -100,3 +100,28 @@ O objetivo desta fase é abandonar as frágeis listas de keywords na detecção 
   - `deep_research_council` → `("council", args["query"])`
 - Criar rotina formal de *Try/Except* que degrada a leitura para a função purista velha de `classify_intent()` garantindo retrocompatibilidade 100%.
 - Adicionar no bloco de comandos especiais o `/tools`, permitindo ver as descrições em tela do *tools_registry*.
+
+### FASE 14: Agência Autônoma (Background Scheduler)
+O objetivo desta fase é criar uma rotina ativa onde a IARA age por conta própria, não dependendo puramente de "ações reativas" desencadeadas pelo usuário. Um scheduler assíncrono nativo rodará silenciosamente no Termux disparando ações utilitárias (Morning Briefing, Consolidação) ou pesquisas autônomas.
+
+**1. Motor de Agendamento (scheduler.py)**
+- Implementar Loop `asyncio` (`while True: await asyncio.sleep(60)`) purista para compatibilidade máxima com ARM/Termux (sem APScheduler).
+- Suporte a dois modos: Horário Absoluto ("HH:MM") que garante `last_run.date() != today.date()` e Intervalos Relativos ("interval:15m") com TimeDeltas.
+- **Ações Nativas**: `morning_briefing` (News/Previsão), `session_end_hook` (Reflexão), `memory_consolidation` (Limpeza Core), `custom_search`.
+
+**2. Persistência de Jobs (core.py)**
+- Atualizar `init_db()` para criar `scheduled_jobs` (`id, name, cron, action, params, enabled, last_run, created_at`).
+- Modelagem de acesso atômico com métodos associados: `add_scheduled_job`, `get_all_scheduled_jobs`, `update_job_last_run`, `toggle_job`, `delete_scheduled_job`.
+
+**3. Interface de Controle (brain.py)**
+- Implementar namespace de comandos `/cron` dentro de `process_message`:
+  - `/cron list`: Visibilidade da tabela de agendamentos.
+  - `/cron add [nome] [cron] [acao] [params]`: Adição on-the-fly.
+  - `/cron toggle [nome]`: Liga/Desliga sem deletar a recorrência cronológica.
+  - `/cron remove [nome]`: Exclusão.
+  - `/cron run [nome]`: Disparo forçado ignorando o relógio.
+
+**4. Acoplamento & Vida Independente (brain.py & telegram_bot.py)**
+- Expor `send_proactive_message(text)` que utilize o `_reminder_chat_id` persistido para que o scheduler possa notificar ativamente o criador por Fora da `process_message`, sem context window (Ex: Morning Briefing acorda o usuário proativamente).
+- Acoplar `asyncio.create_task(scheduler.start_scheduler(send_proactive_message))` no endpoint de Startup do sistema.
+- Se a tabela estiver vazia na migração, criar `morning_briefing` (08:00) e `session_end_hook` (23:30) em modo `enabled=0` (Desligados) aguardando ativação via `/cron toggle`.

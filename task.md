@@ -74,12 +74,24 @@
   - [x] RAG: Cosine Similarity sobre `episodic_memory` filtrada, limitando a injeção ao TOP-3 episódios no prompt de sistema.
 
 ## Fase 13: Function Calling (Tool Use Formal)
-- [ ] **Etapa 1: Tool Registry Centralizado**
-  - [ ] Criar arquivo `tools_registry.py` formalizando schemas JSON (OpenAI format) para 13 tools nativas.
-- [ ] **Etapa 2: LLM Router Refactor**
-  - [ ] Habilitar kwargs `{tools, tool_choice}` no dispatcher `router.generate()`.
-  - [ ] Parsear field `tool_calls` quando injetado pelo provider, retornando mapping simples.
-- [ ] **Etapa 3: Integração Híbrida no Brain**
-  - [ ] Desenvolver `classify_intent_with_tools` chamando modelo rápido (`require_fast=True`).
-  - [ ] Implementar Sandbox Try/Except forçando callback p/ regex legado de keywords se houver falha de provider.
-  - [ ] Integrar handler `/tools` listando catálogo online.
+- [x] **Etapa 1: Tool Registry Centralizado**
+  - [x] Criar arquivo `tools_registry.py` formalizando schemas JSON (OpenAI format) para 13 tools nativas.
+- [x] **Etapa 2: LLM Router Refactor**
+  - [x] Habilitar kwargs `{tools, tool_choice}` no dispatcher `router.generate()`.
+  - [x] Parsear field `tool_calls` quando injetado pelo provider, retornando mapping simples.
+- [x] **Etapa 3: Integração Híbrida no Brain**
+  - [x] Desenvolver `classify_intent_with_tools` chamando modelo rápido (`require_fast=True`).
+  - [x] Implementar Sandbox Try/Except forçando callback p/ regex legado de keywords se houver falha de provider.
+  - [x] Integrar handler `/tools` listando catálogo online.
+
+## Fase 14: Agência Autônoma (Background Scheduler)
+- [ ] **Etapa 1: Persistência de Jobs (Migration)**
+  - [ ] Implementar `scheduled_jobs` no `core.py` (id, name, cron, action, params, enabled, last_run).
+  - [ ] Criar CRUD (`add_scheduled_job`, `get_all`, `toggle_job`, etc).
+- [ ] **Etapa 2: Motor de Agendamento (scheduler.py)**
+  - [ ] Criar loop assíncrono isolado a cada 60 segundos com parsing de `HH:MM` e `interval:Nm`.
+  - [ ] Implementar Actions executor: `morning_briefing`, `session_end_hook`, `memory_consolidation`, `custom_search`.
+- [ ] **Etapa 3: Interface Proativa (brain.py)**
+  - [ ] Injetar `asyncio.create_task(scheduler.start_scheduler())` no main de comunicação (telegram bot startup).
+  - [ ] Implementar comandos de terminal em `process_message`: `/cron list`, `/cron add`, `/cron toggle`, `/cron remove`, `/cron run`.
+  - [ ] Popular banco virgem com `morning_briefing` (08:00) e `session_end_hook` (23:30) desativados.
