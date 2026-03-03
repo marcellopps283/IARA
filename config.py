@@ -139,3 +139,15 @@ BRAVE_MAX_DAILY = 60  # 2000/mês ÷ 30 dias
 # Telegram
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STREAMING_EDIT_INTERVAL = 0.8  # Segundos entre edições da mensagem (streaming)
+
+def validate_config():
+    """Valida as chaves de API essenciais no startup e emite warnings de degradação graciosa."""
+    import logging
+    logger = logging.getLogger("config")
+    
+    if not COHERE_API_KEY:
+        logger.warning("⚠️ COHERE_API_KEY ausente -> RAG semântico desabilitado (fallback para busca por data).")
+    if not GROQ_API_KEY:
+        logger.warning("⚠️ GROQ_API_KEY ausente -> Function Calling degradado para keywords legadas.")
+    if not os.getenv("E2B_API_KEY"):
+        logger.warning("⚠️ E2B_API_KEY ausente -> Sandbox remoto desabilitado.")

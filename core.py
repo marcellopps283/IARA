@@ -240,10 +240,13 @@ async def get_conversation(limit: int = None, project_id: int | None = None) -> 
     return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
 
 
-async def get_working_memory_count() -> int:
+async def get_working_memory_count(project_id: int | None = None) -> int:
     """Conta quantas mensagens tem na working memory."""
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM working_memory")
+        if project_id is not None:
+            cursor = await db.execute("SELECT COUNT(*) FROM working_memory WHERE project_id = ? OR project_id IS NULL", (project_id,))
+        else:
+            cursor = await db.execute("SELECT COUNT(*) FROM working_memory WHERE project_id IS NULL")
         row = await cursor.fetchone()
     return row[0]
 
@@ -259,11 +262,18 @@ async def compact_working_memory(summary: str, project_id: int | None = None):
 
     # Manter apenas as últimas 4 mensagens
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        await db.execute("""
-            DELETE FROM working_memory WHERE id NOT IN (
-                SELECT id FROM working_memory ORDER BY id DESC LIMIT 4
-            )
-        """)
+        if project_id is not None:
+            await db.execute("""
+                DELETE FROM working_memory WHERE id NOT IN (
+                    SELECT id FROM working_memory WHERE project_id = ? OR project_id IS NULL ORDER BY id DESC LIMIT 4
+                ) AND (project_id = ? OR project_id IS NULL)
+            """, (project_id, project_id))
+        else:
+            await db.execute("""
+                DELETE FROM working_memory WHERE id NOT IN (
+                    SELECT id FROM working_memory WHERE project_id IS NULL ORDER BY id DESC LIMIT 4
+                ) AND project_id IS NULL
+            """)
         await db.commit()
 
     logger.info("📦 Working memory compactada. Resumo salvo na episodic.")

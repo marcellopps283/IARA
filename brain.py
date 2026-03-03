@@ -1227,6 +1227,9 @@ async def main():
     """Inicializa tudo e inicia o bot."""
     logger.info("🌊 Iara está acordando...")
 
+    # Phase 15: Validar configs e alertar sobre degradação de features
+    config.validate_config()
+
     await core.init_db()
     logger.info("✅ Memória inicializada")
     
