@@ -61,3 +61,10 @@ Reforma do `CONTEXTO_IA.md` e injeção semântica evolutiva.
 1. Criar e autorizar uma tarefa destrutiva que passará pelas 5 Fases. Observar se o roteador de modelos no Console troca a _engine_ ativa baseando-se no `task_type` de acordo com a fase (`gemini` -> `cerebras` -> `kimi` -> etc), acionando o Backoff do Token Bucket se necessário.
 2. Interceptar a `Fase 4 (REVIEW)` simulando a injeção manual de um token/senha falsa na UI. Confirmar se o `beforeSubmitPrompt` paralisa e alerta, como planejado no Red Team Audit.
 3. **Teste do Ciclo de Instintos (Fase 5)**: Simular uma sessão onde um padrão repetitivo é ensinado. Validar se o `SessionEndHook` gerou o micro-arquivo de instinto no final. Repetir isso 3 vezes simuladas e acionar manualmente o script das 3h da manhã (`memory_core_skill.py`) para confirmar se o agrupamento gerou corretamente um novo arquivo `.md` na pasta `skills/`.
+
+### FASE 15: Consolidação e Hardening
+Nesta fase fechamos lacunas críticas de qualidade e resiliência:
+- **Suite de Testes (`tests/`)**: Criação de testes unitários isolados com banco em memória usando `pytest` e `pytest-asyncio` para os módulos `core.py`, `scheduler.py`, `tools_registry.py` e `hooks.py`.
+- **Validação de Config (`validate_config`)**: O sistema avisa no startup se faltarem chaves de API, indicando quais recursos ficarão degradados (RAG, Sandbox, Function Calling), mantendo a IARA operante.
+- **Auditoria Core**: Correção de queries mal formadas em `compact_working_memory` e `get_working_memory_count` que ignoravam o isolamento de projeto ativo (`project_id`).
+- **Dependências Oficiais**: Adição correta de libs como `cohere`, `pytest`, `aiosqlite`, ao documento `requirements.txt`.
