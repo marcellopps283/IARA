@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>IARA - Dashboard</title>
+  <meta name="description" content="IARA - Painel de controle de Inteligencia Artificial">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="IARA">
+  <meta name="theme-color" content="#0a0f1e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.json">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            slate: {
+              950: '#0a0f1e',
+              925: '#0d1225',
+              900: '#0f172a',
+              850: '#131b31',
+              800: '#1e293b',
+              750: '#243047',
+              700: '#334155',
+              600: '#475569',
+              500: '#64748b',
+              400: '#94a3b8',
+              300: '#cbd5e1',
+              200: '#e2e8f0',
+            },
+            ocean: {
+              950: '#082035',
+              900: '#0c3450',
+              800: '#0a4a6e',
+              700: '#0369a1',
+              600: '#0284c7',
+              500: '#0ea5e9',
+              400: '#38bdf8',
+              300: '#7dd3fc',
+              200: '#bae6fd',
+            },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #0a0f1e; color: #e2e8f0; overflow: hidden; height: 100dvh; }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    
+    /* Sidebar transition */
+    .sidebar { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .sidebar-overlay { transition: opacity 0.3s ease; }
+    
+    /* Tab content animation */
+    .tab-content { animation: fadeIn 0.25s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* Chat bubbles */
+    .msg-user { background: linear-gradient(135deg, #0369a1, #0284c7); }
+    .msg-ai { background: #131b31; border: 1px solid #1e293b; }
+    
+    /* Glow effects */
+    .glow-dot { box-shadow: 0 0 8px #22c55e, 0 0 16px rgba(34, 197, 94, 0.3); }
+    .card-hover { transition: all 0.2s ease; }
+    .card-hover:hover { border-color: #0ea5e9; box-shadow: 0 0 20px rgba(14, 165, 233, 0.08); }
+    
+    /* Select styling */
+    select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M4.646 5.646a.5.5 0 0 1 .708 0L8 8.293l2.646-2.647a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; padding-right: 2.25rem; }
+    
+    /* Pulse animation for status */
+    .pulse-ring { animation: pulseRing 2s infinite; }
+    @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+    
+    /* Input focus */
+    input:focus, textarea:focus, select:focus { outline: none; }
+    
+    /* Typing indicator */
+    .typing-dot { animation: typingBounce 1.4s infinite ease-in-out both; }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes typingBounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+    
+    /* Safe area for mobile */
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  </style>
+</head>
+<body class="dark">
+
+  <!-- Sidebar Overlay (mobile) -->
+  <div id="sidebarOverlay" class="sidebar-overlay fixed inset-0 bg-black/60 backdrop-blur-sm z-40 opacity-0 pointer-events-none lg:hidden" onclick="toggleSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar fixed top-0 left-0 h-full w-72 bg-slate-900/95 backdrop-blur-md border-r border-slate-800/80 z-50 flex flex-col -translate-x-full lg:translate-x-0">
+    
+    <!-- Logo -->
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-800/60">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center shadow-lg shadow-ocean-500/20">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+          <path d="M16 14a4 4 0 0 0-8 0v1a7 7 0 0 0 14 0v-1h-6z" opacity="0.5"/>
+          <circle cx="12" cy="6" r="1" fill="white"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-wide text-slate-100">IARA</h1>
+        <p class="text-xs text-slate-500 font-medium">Painel de Controle</p>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="flex-1 overflow-y-auto py-4 px-3">
+      <ul class="flex flex-col gap-1" id="navList">
+        <li>
+          <button onclick="switchTab('overview')" data-tab="overview" class="nav-btn w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 active">
+            <span class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-base">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </span>
+            Visao Geral
+          </button>
+        </li>
+        <li>
+          <button onclick="switchTab('chat')" data-tab="chat" class="nav-btn w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-300 hover:text-slate-100 hover:bg-slate-800/60">
+            <span class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-base">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            IARA
+          </button>
+        </li>
+        <li>
+          <button onclick="switchTab('logs')" data-tab="logs" class="nav-btn w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-300 hover:text-slate-100 hover:bg-slate-800/60">
+            <span class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-base">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </span>
+            Logs do Sistema
+          </button>
+        </li>
+        <li>
+          <button onclick="switchTab('memory')" data-tab="memory" class="nav-btn w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-300 hover:text-slate-100 hover:bg-slate-800/60">
+            <span class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-base">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/></svg>
+            </span>
+            Core Memory
+          </button>
+        </li>
+        <li>
+          <button onclick="switchTab('research')" data-tab="research" class="nav-btn w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-300 hover:text-slate-100 hover:bg-slate-800/60">
+            <span class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-base">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            </span>
+            Biblioteca de Pesquisas
+          </button>
+        </li>
+        <li>
+          <button onclick="switchTab('workers')" data-tab="workers" class="nav-btn w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-300 hover:text-slate-100 hover:bg-slate-800/60">
+            <span class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-base">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
+            </span>
+            Workers
+          </button>
+        </li>
+        <li>
+          <button onclick="switchTab('settings')" data-tab="settings" class="nav-btn w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-300 hover:text-slate-100 hover:bg-slate-800/60">
+            <span class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-base">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </span>
+            Configuracoes
+          </button>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- Sidebar footer -->
+    <div class="px-4 py-4 border-t border-slate-800/60">
+      <div class="flex items-center gap-3 px-2">
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-ocean-600 to-ocean-800 flex items-center justify-center text-xs font-bold text-white shadow-md">OP</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-slate-200 truncate">Operador</p>
+          <p class="text-xs text-slate-500 truncate">admin@iara.ai</p>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main wrapper -->
+  <div class="lg:ml-72 flex flex-col h-[100dvh]">
+
+    <!-- Header -->
+    <header class="flex-shrink-0 relative flex items-center h-16 border-b border-slate-800/60 bg-slate-925/80 backdrop-blur-md px-4 lg:px-6">
+      <!-- Left: Hamburger + Project select -->
+      <div class="flex items-center gap-2 flex-shrink-0 z-10">
+        <button id="menuBtn" onclick="toggleSidebar()" class="lg:hidden w-11 h-11 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors" aria-label="Menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <select class="hidden sm:block bg-slate-800 border border-slate-700/60 text-slate-300 text-sm rounded-xl px-3 py-2 focus:border-ocean-500/60 transition-colors cursor-pointer min-w-[140px]">
+          <option>IARA Principal</option>
+          <option>IARA Staging</option>
+          <option>IARA Dev</option>
+        </select>
+      </div>
+      <!-- Center: Page title (absolute centered) -->
+      <h2 id="pageTitle" class="absolute inset-0 flex items-center justify-center text-base lg:text-lg font-semibold text-slate-100 pointer-events-none truncate px-32 lg:px-48">Visao Geral</h2>
+      <!-- Right: Status badge -->
+      <div class="ml-auto flex items-center gap-2 lg:gap-3 flex-shrink-0 z-10">
+        <div class="flex items-center gap-2 bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="pulse-ring absolute inline-flex h-full w-full rounded-full bg-green-400"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400 glow-dot"></span>
+          </span>
+          <span class="text-xs font-medium text-green-400 hidden sm:inline">VIVO</span>
+          <span class="text-xs text-slate-500 hidden md:inline" id="uptimeDisplay">00:00:00</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="mainContent" class="flex-1 overflow-hidden flex flex-col min-h-0">
+
+      <!-- ===== VISAO GERAL ===== -->
+      <div id="tab-overview" class="tab-content overflow-y-auto h-full p-4 lg:p-6">
+        <!-- Metric Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 mb-6">
+          <!-- Card 1 -->
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-4 lg:p-5">
+            <div class="flex items-center justify-between mb-3">
+              <span class="w-10 h-10 rounded-xl bg-ocean-500/10 flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </span>
+              <span class="text-xs font-medium text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">+12%</span>
+            </div>
+            <p class="text-2xl lg:text-3xl font-bold text-slate-100 mb-1">1.248</p>
+            <p class="text-xs lg:text-sm text-slate-500">Mensagens na RAM</p>
+          </div>
+          <!-- Card 2 -->
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-4 lg:p-5">
+            <div class="flex items-center justify-between mb-3">
+              <span class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              </span>
+              <span class="text-xs font-medium text-ocean-400 bg-ocean-400/10 px-2 py-0.5 rounded-full">847</span>
+            </div>
+            <p class="text-2xl lg:text-3xl font-bold text-slate-100 mb-1">3.421</p>
+            <p class="text-xs lg:text-sm text-slate-500">Episodios Salvos</p>
+          </div>
+          <!-- Card 3 -->
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-4 lg:p-5">
+            <div class="flex items-center justify-between mb-3">
+              <span class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </span>
+              <span class="text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">Ativo</span>
+            </div>
+            <p class="text-lg lg:text-xl font-bold text-slate-100 mb-1">GPT-4o</p>
+            <p class="text-xs lg:text-sm text-slate-500">LLM Ativo</p>
+          </div>
+          <!-- Card 4 -->
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-4 lg:p-5">
+            <div class="flex items-center justify-between mb-3">
+              <span class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </span>
+              <span class="text-xs font-medium text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">99.9%</span>
+            </div>
+            <p class="text-lg lg:text-xl font-bold text-green-400 mb-1">Operacional</p>
+            <p class="text-xs lg:text-sm text-slate-500">Status do Sistema</p>
+          </div>
+        </div>
+
+        <!-- Activity & Performance -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <!-- Recent Activity -->
+          <div class="bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-slate-200">Atividade Recente</h3>
+              <span class="text-xs text-slate-500">Ultimas 24h</span>
+            </div>
+            <div class="flex flex-col gap-3">
+              <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-lg bg-ocean-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-slate-300">Nova conversa iniciada com <span class="text-ocean-400 font-medium">Projeto Alpha</span></p>
+                  <p class="text-xs text-slate-500 mt-0.5">2 min atras</p>
+                </div>
+              </div>
+              <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-slate-300">Memoria consolidada com sucesso - <span class="text-green-400 font-medium">128 blocos</span></p>
+                  <p class="text-xs text-slate-500 mt-0.5">15 min atras</p>
+                </div>
+              </div>
+              <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-slate-300">Worker <span class="text-amber-400 font-medium">pesquisa-web</span> finalizado</p>
+                  <p class="text-xs text-slate-500 mt-0.5">32 min atras</p>
+                </div>
+              </div>
+              <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-slate-300">Configuracao de <span class="text-purple-400 font-medium">temperatura</span> atualizada para 0.7</p>
+                  <p class="text-xs text-slate-500 mt-0.5">1h atras</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- System Performance -->
+          <div class="bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-slate-200">Performance do Sistema</h3>
+              <span class="text-xs text-slate-500">Tempo real</span>
+            </div>
+            <div class="flex flex-col gap-4">
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-sm text-slate-400">CPU</span>
+                  <span class="text-sm font-medium text-slate-200">23%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-ocean-500 rounded-full transition-all duration-500" style="width: 23%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-sm text-slate-400">Memoria RAM</span>
+                  <span class="text-sm font-medium text-slate-200">67%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-purple-500 rounded-full transition-all duration-500" style="width: 67%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-sm text-slate-400">Disco</span>
+                  <span class="text-sm font-medium text-slate-200">41%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-amber-500 rounded-full transition-all duration-500" style="width: 41%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-sm text-slate-400">Rede</span>
+                  <span class="text-sm font-medium text-slate-200">12%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-green-500 rounded-full transition-all duration-500" style="width: 12%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CHAT COM IA ===== -->
+      <div id="tab-chat" class="tab-content hidden h-full flex flex-col">
+        <!-- Chat Messages -->
+        <div id="chatMessages" class="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col gap-4">
+          <!-- AI Welcome -->
+          <div class="flex items-start gap-3 max-w-2xl">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <div class="msg-ai rounded-2xl rounded-tl-md px-4 py-3 max-w-full">
+              <p class="text-sm text-slate-200 leading-relaxed">Ola! Eu sou a <strong class="text-ocean-400">IARA</strong>, sua assistente de inteligencia artificial. Estou pronta para ajudar voce com qualquer tarefa. Como posso ajudar hoje?</p>
+            </div>
+          </div>
+          <!-- User msg -->
+          <div class="flex max-w-2xl self-end">
+            <div class="msg-user rounded-2xl px-4 py-3">
+              <p class="text-sm text-white leading-relaxed">Qual o status atual dos workers?</p>
+            </div>
+          </div>
+          <!-- AI Response -->
+          <div class="flex items-start gap-3 max-w-2xl">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <div class="msg-ai rounded-2xl rounded-tl-md px-4 py-3 max-w-full">
+              <p class="text-sm text-slate-200 leading-relaxed">Todos os <strong class="text-green-400">3 workers</strong> estao operacionais:</p>
+              <ul class="mt-2 flex flex-col gap-1.5 text-sm text-slate-300">
+                <li class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-400"></span>pesquisa-web - Ativo</li>
+                <li class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-400"></span>analise-dados - Ativo</li>
+                <li class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-400"></span>indexacao - Em fila</li>
+              </ul>
+              <p class="mt-2 text-sm text-slate-400">Tempo medio de resposta: <strong class="text-slate-200">1.2s</strong></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input -->
+        <div class="flex-shrink-0 border-t border-slate-800/60 bg-slate-925/80 backdrop-blur-md p-3 lg:p-4 safe-bottom">
+          <div class="max-w-3xl mx-auto">
+            <div class="flex items-end gap-2 bg-slate-800/60 border border-slate-700/50 rounded-2xl px-3 py-2 focus-within:border-ocean-500/50 transition-colors">
+              <textarea id="chatInput" rows="1" placeholder="Envie uma mensagem para IARA..." class="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none max-h-32 py-1.5 leading-relaxed" style="font-size: 16px;" oninput="autoResize(this)"></textarea>
+              <button onclick="sendMessage()" class="w-10 h-10 rounded-xl bg-ocean-500 hover:bg-ocean-600 text-white flex items-center justify-center flex-shrink-0 transition-colors active:scale-95" aria-label="Enviar mensagem">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+            <p class="text-center text-xs text-slate-600 mt-2">IARA pode cometer erros. Verifique informacoes importantes.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== LOGS DO SISTEMA ===== -->
+      <div id="tab-logs" class="tab-content hidden overflow-y-auto h-full p-4 lg:p-6">
+        <div class="bg-slate-850 border border-slate-800/60 rounded-2xl overflow-hidden">
+          <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800/60">
+            <h3 class="text-sm font-semibold text-slate-200">Logs em Tempo Real</h3>
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+              <span class="text-xs text-slate-400">Streaming</span>
+            </div>
+          </div>
+          <div class="p-4 font-mono text-xs flex flex-col gap-2 max-h-[60vh] overflow-y-auto" id="logContainer">
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:01]</span><span class="text-green-400">[INFO]</span><span class="text-slate-300">Sistema iniciado com sucesso</span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:03]</span><span class="text-ocean-400">[LLM]</span><span class="text-slate-300">Conexao estabelecida com OpenAI API</span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:05]</span><span class="text-green-400">[INFO]</span><span class="text-slate-300">Workers carregados: pesquisa-web, analise-dados, indexacao</span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:08]</span><span class="text-purple-400">[MEM]</span><span class="text-slate-300">Core Memory carregada - 3.421 episodios disponiveis</span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:10]</span><span class="text-amber-400">[WARN]</span><span class="text-slate-300">Cache de pesquisas atingiu 78% da capacidade</span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:15]</span><span class="text-green-400">[INFO]</span><span class="text-slate-300">Heartbeat: todos os servicos respondem normalmente</span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:20]</span><span class="text-ocean-400">[LLM]</span><span class="text-slate-300">Token usage: 12.480 / 128.000 (9.7%)</span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:22]</span><span class="text-green-400">[INFO]</span><span class="text-slate-300">Nova sessao de chat aberta pelo operador</span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:30]</span><span class="text-purple-400">[MEM]</span><span class="text-slate-300">Consolidacao de memoria agendada para 04:00</span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-600 flex-shrink-0">[03:22:45]</span><span class="text-green-400">[INFO]</span><span class="text-slate-300">Worker pesquisa-web completou tarefa #847 em 2.3s</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CORE MEMORY ===== -->
+      <div id="tab-memory" class="tab-content hidden overflow-y-auto h-full p-4 lg:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Memory Stats -->
+          <div class="bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <h3 class="text-sm font-semibold text-slate-200 mb-4">Estatisticas de Memoria</h3>
+            <div class="flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-400">Total de Episodios</span>
+                <span class="text-sm font-semibold text-slate-200">3.421</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-400">Memoria de Curto Prazo</span>
+                <span class="text-sm font-semibold text-ocean-400">128 blocos</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-400">Memoria de Longo Prazo</span>
+                <span class="text-sm font-semibold text-purple-400">3.293 blocos</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-400">Ultima Consolidacao</span>
+                <span class="text-sm font-semibold text-slate-200">Hoje, 03:00</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-slate-400">Capacidade Utilizada</span>
+                <span class="text-sm font-semibold text-amber-400">67%</span>
+              </div>
+            </div>
+          </div>
+          <!-- Memory Blocks -->
+          <div class="bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <h3 class="text-sm font-semibold text-slate-200 mb-4">Blocos Recentes</h3>
+            <div class="flex flex-col gap-3">
+              <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/30">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-medium text-ocean-400">#MEM-3421</span>
+                  <span class="text-xs text-slate-500">2 min</span>
+                </div>
+                <p class="text-sm text-slate-300">Preferencias do usuario atualizadas: idioma pt-BR, tema escuro, respostas detalhadas</p>
+              </div>
+              <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/30">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-medium text-ocean-400">#MEM-3420</span>
+                  <span class="text-xs text-slate-500">18 min</span>
+                </div>
+                <p class="text-sm text-slate-300">Contexto de pesquisa salvo: machine learning frameworks comparacao 2026</p>
+              </div>
+              <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/30">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-medium text-purple-400">#MEM-3419</span>
+                  <span class="text-xs text-slate-500">45 min</span>
+                </div>
+                <p class="text-sm text-slate-300">Resumo de sessao: 14 mensagens, topico principal - arquitetura de microservicos</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== BIBLIOTECA DE PESQUISAS ===== -->
+      <div id="tab-research" class="tab-content hidden overflow-y-auto h-full p-4 lg:p-6">
+        <div class="mb-4">
+          <div class="flex items-center gap-2 bg-slate-850 border border-slate-800/60 rounded-2xl px-4 py-3 focus-within:border-ocean-500/50 transition-colors">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Buscar pesquisas..." class="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500" style="font-size: 16px;">
+          </div>
+        </div>
+        <div class="flex flex-col gap-3">
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-4">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-medium text-ocean-400 bg-ocean-400/10 px-2 py-0.5 rounded-full">Concluida</span>
+              <span class="text-xs text-slate-500">03/03/2026</span>
+            </div>
+            <h4 class="text-sm font-semibold text-slate-200 mb-1">Comparativo de frameworks de IA 2026</h4>
+            <p class="text-xs text-slate-400 leading-relaxed">Analise comparativa entre TensorFlow, PyTorch e JAX para producao em escala empresarial...</p>
+            <div class="flex items-center gap-2 mt-3">
+              <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-lg">Machine Learning</span>
+              <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-lg">Frameworks</span>
+            </div>
+          </div>
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-4">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">Em progresso</span>
+              <span class="text-xs text-slate-500">02/03/2026</span>
+            </div>
+            <h4 class="text-sm font-semibold text-slate-200 mb-1">Otimizacao de prompts para RAG</h4>
+            <p class="text-xs text-slate-400 leading-relaxed">Estudo sobre tecnicas de retrieval-augmented generation para melhorar precisao de respostas...</p>
+            <div class="flex items-center gap-2 mt-3">
+              <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-lg">NLP</span>
+              <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-lg">RAG</span>
+            </div>
+          </div>
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-4">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-medium text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">Concluida</span>
+              <span class="text-xs text-slate-500">28/02/2026</span>
+            </div>
+            <h4 class="text-sm font-semibold text-slate-200 mb-1">Seguranca em APIs de LLM</h4>
+            <p class="text-xs text-slate-400 leading-relaxed">Mapeamento de vulnerabilidades e boas praticas para proteger endpoints de modelos de linguagem...</p>
+            <div class="flex items-center gap-2 mt-3">
+              <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-lg">Seguranca</span>
+              <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-lg">API</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== WORKERS ===== -->
+      <div id="tab-workers" class="tab-content hidden overflow-y-auto h-full p-4 lg:p-6">
+        <div class="flex flex-col gap-4">
+          <!-- Worker 1 -->
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div>
+                  <h4 class="text-sm font-semibold text-slate-200">pesquisa-web</h4>
+                  <p class="text-xs text-slate-500">Coleta e indexacao de dados da web</p>
+                </div>
+              </div>
+              <span class="text-xs font-medium text-green-400 bg-green-400/10 px-3 py-1 rounded-full">Ativo</span>
+            </div>
+            <div class="grid grid-cols-3 gap-3 mt-3">
+              <div class="bg-slate-800/50 rounded-xl p-3 text-center">
+                <p class="text-lg font-bold text-slate-200">847</p>
+                <p class="text-xs text-slate-500">Tarefas</p>
+              </div>
+              <div class="bg-slate-800/50 rounded-xl p-3 text-center">
+                <p class="text-lg font-bold text-slate-200">2.3s</p>
+                <p class="text-xs text-slate-500">Media</p>
+              </div>
+              <div class="bg-slate-800/50 rounded-xl p-3 text-center">
+                <p class="text-lg font-bold text-green-400">99.2%</p>
+                <p class="text-xs text-slate-500">Sucesso</p>
+              </div>
+            </div>
+          </div>
+          <!-- Worker 2 -->
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-ocean-500/10 flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                </div>
+                <div>
+                  <h4 class="text-sm font-semibold text-slate-200">analise-dados</h4>
+                  <p class="text-xs text-slate-500">Processamento e analise de datasets</p>
+                </div>
+              </div>
+              <span class="text-xs font-medium text-green-400 bg-green-400/10 px-3 py-1 rounded-full">Ativo</span>
+            </div>
+            <div class="grid grid-cols-3 gap-3 mt-3">
+              <div class="bg-slate-800/50 rounded-xl p-3 text-center">
+                <p class="text-lg font-bold text-slate-200">1.234</p>
+                <p class="text-xs text-slate-500">Tarefas</p>
+              </div>
+              <div class="bg-slate-800/50 rounded-xl p-3 text-center">
+                <p class="text-lg font-bold text-slate-200">4.1s</p>
+                <p class="text-xs text-slate-500">Media</p>
+              </div>
+              <div class="bg-slate-800/50 rounded-xl p-3 text-center">
+                <p class="text-lg font-bold text-green-400">97.8%</p>
+                <p class="text-xs text-slate-500">Sucesso</p>
+              </div>
+            </div>
+          </div>
+          <!-- Worker 3 -->
+          <div class="card-hover bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+                <div>
+                  <h4 class="text-sm font-semibold text-slate-200">indexacao</h4>
+                  <p class="text-xs text-slate-500">Indexacao de documentos e embeddings</p>
+                </div>
+              </div>
+              <span class="text-xs font-medium text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full">Em fila</span>
+            </div>
+            <div class="grid grid-cols-3 gap-3 mt-3">
+              <div class="bg-slate-800/50 rounded-xl p-3 text-center">
+                <p class="text-lg font-bold text-slate-200">562</p>
+                <p class="text-xs text-slate-500">Tarefas</p>
+              </div>
+              <div class="bg-slate-800/50 rounded-xl p-3 text-center">
+                <p class="text-lg font-bold text-slate-200">6.7s</p>
+                <p class="text-xs text-slate-500">Media</p>
+              </div>
+              <div class="bg-slate-800/50 rounded-xl p-3 text-center">
+                <p class="text-lg font-bold text-amber-400">94.5%</p>
+                <p class="text-xs text-slate-500">Sucesso</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CONFIGURACOES ===== -->
+      <div id="tab-settings" class="tab-content hidden overflow-y-auto h-full p-4 lg:p-6">
+        <div class="max-w-2xl flex flex-col gap-4">
+          <!-- LLM Config -->
+          <div class="bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <h3 class="text-sm font-semibold text-slate-200 mb-4">Modelo de Linguagem</h3>
+            <div class="flex flex-col gap-4">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5">Provedor</label>
+                <select class="w-full bg-slate-800 border border-slate-700/60 text-slate-300 text-sm rounded-xl px-3 py-2.5 focus:border-ocean-500/60 transition-colors" style="font-size: 16px;">
+                  <option>OpenAI</option>
+                  <option>Anthropic</option>
+                  <option>Google</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5">Modelo</label>
+                <select class="w-full bg-slate-800 border border-slate-700/60 text-slate-300 text-sm rounded-xl px-3 py-2.5 focus:border-ocean-500/60 transition-colors" style="font-size: 16px;">
+                  <option>gpt-4o</option>
+                  <option>gpt-4o-mini</option>
+                  <option>gpt-4-turbo</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5">Temperatura: <span class="text-ocean-400 font-medium" id="tempValue">0.7</span></label>
+                <input type="range" min="0" max="100" value="70" class="w-full h-2 bg-slate-800 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-ocean-500 [&::-webkit-slider-thumb]:shadow-lg" oninput="document.getElementById('tempValue').textContent = (this.value / 100).toFixed(1)">
+              </div>
+            </div>
+          </div>
+          <!-- System Config -->
+          <div class="bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <h3 class="text-sm font-semibold text-slate-200 mb-4">Sistema</h3>
+            <div class="flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-slate-200">Consolidacao automatica</p>
+                  <p class="text-xs text-slate-500">Agendar consolidacao de memoria</p>
+                </div>
+                <button onclick="this.classList.toggle('bg-ocean-500'); this.classList.toggle('bg-slate-700'); this.querySelector('span').classList.toggle('translate-x-5')" class="w-11 h-6 bg-ocean-500 rounded-full relative transition-colors cursor-pointer">
+                  <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform translate-x-5"></span>
+                </button>
+              </div>
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-slate-200">Logs detalhados</p>
+                  <p class="text-xs text-slate-500">Incluir informacoes de debug</p>
+                </div>
+                <button onclick="this.classList.toggle('bg-ocean-500'); this.classList.toggle('bg-slate-700'); this.querySelector('span').classList.toggle('translate-x-5')" class="w-11 h-6 bg-slate-700 rounded-full relative transition-colors cursor-pointer">
+                  <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform"></span>
+                </button>
+              </div>
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-slate-200">Notificacoes</p>
+                  <p class="text-xs text-slate-500">Alertas de erros e avisos</p>
+                </div>
+                <button onclick="this.classList.toggle('bg-ocean-500'); this.classList.toggle('bg-slate-700'); this.querySelector('span').classList.toggle('translate-x-5')" class="w-11 h-6 bg-ocean-500 rounded-full relative transition-colors cursor-pointer">
+                  <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform translate-x-5"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- API Keys -->
+          <div class="bg-slate-850 border border-slate-800/60 rounded-2xl p-5">
+            <h3 class="text-sm font-semibold text-slate-200 mb-4">Chaves de API</h3>
+            <div class="flex flex-col gap-3">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5">OpenAI API Key</label>
+                <div class="flex items-center gap-2">
+                  <input type="password" value="sk-...xxxx" class="flex-1 bg-slate-800 border border-slate-700/60 text-slate-300 text-sm rounded-xl px-3 py-2.5 focus:border-ocean-500/60 transition-colors" style="font-size: 16px;" readonly>
+                  <button class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // ===== State =====
+    let sidebarOpen = false;
+    let uptimeSeconds = 0;
+    const tabTitles = {
+      overview: 'Visao Geral',
+      chat: 'IARA',
+      logs: 'Logs do Sistema',
+      memory: 'Core Memory',
+      research: 'Biblioteca de Pesquisas',
+      workers: 'Workers',
+      settings: 'Configuracoes'
+    };
+
+    // ===== Sidebar Toggle =====
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      sidebarOpen = !sidebarOpen;
+      if (sidebarOpen) {
+        sidebar.classList.remove('-translate-x-full');
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.add('opacity-100', 'pointer-events-auto');
+      } else {
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('opacity-0', 'pointer-events-none');
+        overlay.classList.remove('opacity-100', 'pointer-events-auto');
+      }
+    }
+
+    // ===== Tab Switching =====
+    function switchTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(function(el) {
+        el.classList.add('hidden');
+        el.classList.remove('flex');
+      });
+      // Show target
+      var target = document.getElementById('tab-' + tabName);
+      target.classList.remove('hidden');
+      if (tabName === 'chat') {
+        target.classList.add('flex');
+      }
+      // Update nav active
+      document.querySelectorAll('.nav-btn').forEach(function(btn) {
+        btn.classList.remove('active', 'bg-ocean-500/10', 'text-ocean-400', 'border-ocean-500/20');
+        btn.classList.add('text-slate-300');
+        btn.querySelector('span').classList.remove('bg-ocean-500/15', 'text-ocean-400');
+        btn.querySelector('span').classList.add('bg-slate-800/80');
+      });
+      var activeBtn = document.querySelector('[data-tab="' + tabName + '"]');
+      activeBtn.classList.add('active', 'bg-ocean-500/10', 'text-ocean-400');
+      activeBtn.classList.remove('text-slate-300');
+      activeBtn.querySelector('span').classList.add('bg-ocean-500/15', 'text-ocean-400');
+      activeBtn.querySelector('span').classList.remove('bg-slate-800/80');
+      // Update header title
+      document.getElementById('pageTitle').textContent = tabTitles[tabName];
+      // Close sidebar on mobile
+      if (window.innerWidth < 1024 && sidebarOpen) {
+        toggleSidebar();
+      }
+      // Scroll chat to bottom
+      if (tabName === 'chat') {
+        var chatMsgs = document.getElementById('chatMessages');
+        setTimeout(function() { chatMsgs.scrollTop = chatMsgs.scrollHeight; }, 50);
+      }
+    }
+
+    // Initialize first tab active style
+    switchTab('overview');
+
+    // ===== Chat =====
+    function sendMessage() {
+      var input = document.getElementById('chatInput');
+      var text = input.value.trim();
+      if (!text) return;
+      
+      var chatMsgs = document.getElementById('chatMessages');
+      
+      // User bubble
+      var userDiv = document.createElement('div');
+        userDiv.className = 'flex max-w-2xl self-end';
+        userDiv.innerHTML = '<div class="msg-user rounded-2xl px-4 py-3"><p class="text-sm text-white leading-relaxed">' + escapeHtml(text) + '</p></div>';
+      chatMsgs.appendChild(userDiv);
+      
+      input.value = '';
+      input.style.height = 'auto';
+      chatMsgs.scrollTop = chatMsgs.scrollHeight;
+      
+      // Typing indicator
+      var typingDiv = document.createElement('div');
+      typingDiv.className = 'flex items-start gap-3 max-w-2xl';
+      typingDiv.id = 'typingIndicator';
+      typingDiv.innerHTML = '<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center flex-shrink-0 mt-0.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="msg-ai rounded-2xl rounded-tl-md px-4 py-3"><div class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-ocean-400 typing-dot"></div><div class="w-2 h-2 rounded-full bg-ocean-400 typing-dot"></div><div class="w-2 h-2 rounded-full bg-ocean-400 typing-dot"></div></div></div>';
+      chatMsgs.appendChild(typingDiv);
+      chatMsgs.scrollTop = chatMsgs.scrollHeight;
+      
+      // Simulate AI response
+      setTimeout(function() {
+        var typing = document.getElementById('typingIndicator');
+        if (typing) typing.remove();
+        
+        var responses = [
+          'Entendido! Estou processando sua solicitacao. Com base nos dados atuais do sistema, posso confirmar que tudo esta operando dentro dos parametros normais.',
+          'Analisando sua requisicao... Os dados mostram que os workers estao com uma taxa de sucesso media de 97.2% nas ultimas 24 horas.',
+          'Certo! Vou verificar isso para voce. O sistema de memoria esta utilizando 67% da capacidade total, com a proxima consolidacao agendada para as 04:00.',
+          'Boa pergunta! Posso ajudar com isso. Os logs indicam que nao houve nenhum erro critico nas ultimas 12 horas de operacao.'
+        ];
+        var reply = responses[Math.floor(Math.random() * responses.length)];
+        
+        var aiDiv = document.createElement('div');
+        aiDiv.className = 'flex items-start gap-3 max-w-2xl';
+        aiDiv.innerHTML = '<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center flex-shrink-0 mt-0.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="msg-ai rounded-2xl rounded-tl-md px-4 py-3 max-w-full"><p class="text-sm text-slate-200 leading-relaxed">' + reply + '</p></div>';
+        chatMsgs.appendChild(aiDiv);
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+      }, 1500);
+    }
+
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Auto resize textarea
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+    }
+
+    // Enter to send
+    document.getElementById('chatInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // ===== Uptime Counter =====
+    setInterval(function() {
+      uptimeSeconds++;
+      var h = Math.floor(uptimeSeconds / 3600);
+      var m = Math.floor((uptimeSeconds % 3600) / 60);
+      var s = uptimeSeconds % 60;
+      document.getElementById('uptimeDisplay').textContent = 
+        String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }, 1000);
+
+    // ===== Simulated Log Streaming =====
+    var logTypes = [
+      { tag: '[INFO]', color: 'text-green-400', messages: ['Heartbeat: OK', 'Cache atualizado com sucesso', 'Sessao de chat ativa', 'Backup incremental concluido', 'Worker respondeu em tempo normal'] },
+      { tag: '[LLM]', color: 'text-ocean-400', messages: ['Token refresh realizado', 'Requisicao processada em 1.4s', 'Contexto atualizado para 4096 tokens', 'Embedding gerado com sucesso'] },
+      { tag: '[MEM]', color: 'text-purple-400', messages: ['Novo bloco de memoria salvo', 'Episodio #' + Math.floor(Math.random() * 9999) + ' indexado', 'Memoria de curto prazo otimizada'] },
+      { tag: '[WARN]', color: 'text-amber-400', messages: ['Latencia acima do normal detectada', 'Rate limit proximo do limite'] }
+    ];
+
+    setInterval(function() {
+      var container = document.getElementById('logContainer');
+      if (!container) return;
+      var type = logTypes[Math.floor(Math.random() * logTypes.length)];
+      var msg = type.messages[Math.floor(Math.random() * type.messages.length)];
+      var now = new Date();
+      var time = '[' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0') + ']';
+      
+      var line = document.createElement('div');
+      line.className = 'flex items-start gap-2';
+      line.innerHTML = '<span class="text-slate-600 flex-shrink-0">' + time + '</span><span class="' + type.color + '">' + type.tag + '</span><span class="text-slate-300">' + msg + '</span>';
+      container.appendChild(line);
+      container.scrollTop = container.scrollHeight;
+      
+      // Keep max 50 lines
+      while (container.children.length > 50) {
+        container.removeChild(container.firstChild);
+      }
+    }, 3000);
+
+    // ===== Handle resize =====
+    window.addEventListener('resize', function() {
+      if (window.innerWidth >= 1024) {
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebarOverlay');
+        sidebar.classList.remove('-translate-x-full');
+        overlay.classList.add('opacity-0', 'pointer-events-none');
+        overlay.classList.remove('opacity-100', 'pointer-events-auto');
+        sidebarOpen = false;
+      } else {
+        if (!sidebarOpen) {
+          document.getElementById('sidebar').classList.add('-translate-x-full');
+        }
+      }
+    });
+  </script>
+</body>
+</html>
