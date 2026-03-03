@@ -99,12 +99,45 @@
     
     /* Safe area for mobile */
     .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+    /* iOS Action Sheet Animations */
+    .action-sheet-overlay { transition: opacity 0.3s ease; }
+    .action-sheet-content { transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1); }
   </style>
 </head>
 <body class="dark">
 
   <!-- Sidebar Overlay (mobile) -->
   <div id="sidebarOverlay" class="sidebar-overlay fixed inset-0 bg-black/60 backdrop-blur-sm z-40 opacity-0 pointer-events-none lg:hidden" onclick="toggleSidebar()"></div>
+
+  <!-- Attachment iOS Action Sheet -->
+  <div id="attachmentSheetOverlay" class="action-sheet-overlay fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] opacity-0 pointer-events-none" onclick="toggleAttachmentMenu()">
+    <div id="attachmentSheetContent" class="action-sheet-content absolute bottom-0 left-0 right-0 p-4 translate-y-full" onclick="event.stopPropagation()">
+      <div class="max-w-md mx-auto flex flex-col gap-2 pb-safe-bottom">
+        
+        <!-- Options Block -->
+        <div class="bg-slate-800/95 backdrop-blur-md rounded-2xl overflow-hidden shadow-2xl divide-y divide-slate-700/50">
+          <button onclick="addAttachment('camera')" class="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-slate-700/50 transition-colors">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span class="text-base font-medium text-slate-200">Tirar Foto</span>
+          </button>
+          <button onclick="addAttachment('gallery')" class="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-slate-700/50 transition-colors">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span class="text-base font-medium text-slate-200">Fototeca</span>
+          </button>
+          <button onclick="addAttachment('file')" class="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-slate-700/50 transition-colors">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <span class="text-base font-medium text-slate-200">Arquivos</span>
+          </button>
+        </div>
+
+        <!-- Cancel Button -->
+        <button onclick="toggleAttachmentMenu()" class="w-full bg-slate-800/95 backdrop-blur-md rounded-2xl py-4 text-base font-semibold text-ocean-400 active:bg-slate-700/50 transition-colors shadow-2xl">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Sidebar -->
   <aside id="sidebar" class="sidebar fixed top-0 left-0 h-full w-72 bg-slate-900/95 backdrop-blur-md border-r border-slate-800/80 z-50 flex flex-col -translate-x-full lg:translate-x-0">
@@ -178,7 +211,7 @@
         <li>
           <button onclick="switchTab('settings')" data-tab="settings" class="nav-btn w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-300 hover:text-slate-100 hover:bg-slate-800/60">
             <span class="w-8 h-8 rounded-lg bg-slate-800/80 flex items-center justify-center text-base">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </span>
             Configuracoes
           </button>
@@ -379,9 +412,19 @@
       </div>
 
       <!-- ===== CHAT COM IA ===== -->
-      <div id="tab-chat" class="tab-content hidden h-full flex flex-col">
+      <div id="tab-chat" class="tab-content hidden h-full flex flex-col relative">
+        
+        <!-- Chat Model Selector (Top Bar) -->
+        <div class="absolute top-2 left-1/2 -translate-x-1/2 z-10">
+          <select class="bg-slate-800/90 backdrop-blur-md border border-slate-700/60 text-slate-200 text-xs font-medium rounded-full px-4 py-1.5 focus:border-ocean-500/60 transition-colors shadow-lg cursor-pointer">
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="claude-3">Claude 3.5 Sonnet</option>
+            <option value="gemini-pro">Gemini 1.5 Pro</option>
+          </select>
+        </div>
+
         <!-- Chat Messages -->
-        <div id="chatMessages" class="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col gap-4">
+        <div id="chatMessages" class="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col gap-4 pt-12">
           <!-- AI Welcome -->
           <div class="flex items-start gap-3 max-w-2xl">
             <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -414,17 +457,47 @@
           </div>
         </div>
 
-        <!-- Chat Input -->
-        <div class="flex-shrink-0 border-t border-slate-800/60 bg-slate-925/80 backdrop-blur-md p-3 lg:p-4 safe-bottom">
-          <div class="max-w-3xl mx-auto">
-            <div class="flex items-end gap-2 bg-slate-800/60 border border-slate-700/50 rounded-2xl px-3 py-2 focus-within:border-ocean-500/50 transition-colors">
-              <textarea id="chatInput" rows="1" placeholder="Envie uma mensagem para IARA..." class="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none max-h-32 py-1.5 leading-relaxed" style="font-size: 16px;" oninput="autoResize(this)"></textarea>
-              <button onclick="sendMessage()" class="w-10 h-10 rounded-xl bg-ocean-500 hover:bg-ocean-600 text-white flex items-center justify-center flex-shrink-0 transition-colors active:scale-95" aria-label="Enviar mensagem">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              </button>
-            </div>
-            <p class="text-center text-xs text-slate-600 mt-2">IARA pode cometer erros. Verifique informacoes importantes.</p>
+        <!-- Chat Input Area -->
+        <div class="flex-shrink-0 bg-slate-925/95 backdrop-blur-xl p-3 lg:p-4 safe-bottom relative border-t border-slate-800/60">
+          
+          <!-- Attachments Preview Area (Hidden by default) -->
+          <div id="attachmentsPreview" class="max-w-3xl mx-auto flex flex-wrap gap-2 mb-3 hidden">
+            <!-- Dynamically populated -->
           </div>
+
+          <div class="max-w-3xl mx-auto flex items-end gap-2">
+            <!-- Add (+) Button -->
+            <button onclick="toggleAttachmentMenu()" class="w-10 h-10 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 flex items-center justify-center flex-shrink-0 transition-colors border border-slate-700/50" aria-label="Adicionar anexo">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+
+            <!-- Input Box -->
+            <div class="flex-1 flex flex-col bg-slate-800/60 border border-slate-700/50 rounded-2xl focus-within:border-ocean-500/50 transition-colors overflow-hidden">
+              <textarea id="chatInput" rows="1" placeholder="Envie uma mensagem para IARA..." class="w-full bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none max-h-32 px-4 py-3 leading-relaxed" style="font-size: 16px;" oninput="autoResize(this)"></textarea>
+              
+              <!-- Bottom Input Bar (Toggles) -->
+              <div class="flex items-center justify-between px-3 pb-2 pt-1">
+                <div class="flex items-center gap-1">
+                  <!-- Think Toggle -->
+                  <button id="thinkToggle" onclick="toggleMode('think')" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors border border-transparent">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a8 8 0 0 0-8 8c0 5.4 3 7.8 3 10.2V22h10v-1.8c0-2.4 3-4.8 3-10.2a8 8 0 0 0-8-8z"/><path d="M9 22h6"/></svg>
+                    Think
+                  </button>
+                  <!-- Thought Toggle -->
+                  <button id="thoughtToggle" onclick="toggleMode('thought')" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors border border-transparent">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+                    Thought
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Send Button -->
+            <button onclick="sendMessage()" class="w-11 h-11 rounded-xl bg-ocean-500 hover:bg-ocean-600 text-white flex items-center justify-center flex-shrink-0 transition-colors active:scale-95 shadow-md shadow-ocean-500/20" aria-label="Enviar mensagem">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
+          <p class="text-center text-[10px] text-slate-500 mt-2">IARA pode cometer erros. Verifique informacoes importantes.</p>
         </div>
       </div>
 
@@ -740,6 +813,9 @@
     // ===== State =====
     let sidebarOpen = false;
     let uptimeSeconds = 0;
+    let isAttachmentMenuOpen = false;
+    let activeModes = { think: false, thought: false };
+    
     const tabTitles = {
       overview: 'Visao Geral',
       chat: 'IARA',
@@ -749,6 +825,69 @@
       workers: 'Workers',
       settings: 'Configuracoes'
     };
+
+    // ===== Attachment & Mode Logic =====
+    function toggleAttachmentMenu() {
+      const overlay = document.getElementById('attachmentSheetOverlay');
+      const content = document.getElementById('attachmentSheetContent');
+      
+      isAttachmentMenuOpen = !isAttachmentMenuOpen;
+      
+      if (isAttachmentMenuOpen) {
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        content.classList.remove('translate-y-full');
+      } else {
+        overlay.classList.add('opacity-0', 'pointer-events-none');
+        content.classList.add('translate-y-full');
+      }
+    }
+
+    function addAttachment(type) {
+      toggleAttachmentMenu(); // Close menu
+      
+      const previewArea = document.getElementById('attachmentsPreview');
+      previewArea.classList.remove('hidden');
+      
+      const pill = document.createElement('div');
+      pill.className = 'flex items-center gap-2 bg-slate-800/80 border border-slate-700 rounded-lg pl-2 pr-1 py-1 text-xs text-slate-300';
+      
+      let icon = '';
+      let name = '';
+      
+      if (type === 'camera') {
+        icon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+        name = 'IMG_' + Math.floor(Math.random() * 9999) + '.jpg';
+      } else if (type === 'gallery') {
+        icon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+        name = 'foto_galeria.jpg';
+      } else {
+        icon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+        name = 'documento.pdf';
+      }
+
+      pill.innerHTML = `
+        ${icon}
+        <span class="truncate max-w-[100px]">${name}</span>
+        <button onclick="this.parentElement.remove(); if(document.getElementById('attachmentsPreview').children.length === 0) document.getElementById('attachmentsPreview').classList.add('hidden')" class="w-5 h-5 flex items-center justify-center rounded-md hover:bg-slate-700 text-slate-400 hover:text-slate-200">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      `;
+      
+      previewArea.appendChild(pill);
+    }
+
+    function toggleMode(mode) {
+      activeModes[mode] = !activeModes[mode];
+      const btn = document.getElementById(mode + 'Toggle');
+      
+      if (activeModes[mode]) {
+        btn.classList.add('bg-ocean-500/20', 'text-ocean-400', 'border-ocean-500/30');
+        btn.classList.remove('text-slate-400', 'border-transparent');
+      } else {
+        btn.classList.remove('bg-ocean-500/20', 'text-ocean-400', 'border-ocean-500/30');
+        btn.classList.add('text-slate-400', 'border-transparent');
+      }
+    }
 
     // ===== Sidebar Toggle =====
     function toggleSidebar() {
@@ -825,11 +964,24 @@
       input.style.height = 'auto';
       chatMsgs.scrollTop = chatMsgs.scrollHeight;
       
+      // Clear attachments if any
+      document.getElementById('attachmentsPreview').innerHTML = '';
+      document.getElementById('attachmentsPreview').classList.add('hidden');
+      
       // Typing indicator
       var typingDiv = document.createElement('div');
       typingDiv.className = 'flex items-start gap-3 max-w-2xl';
       typingDiv.id = 'typingIndicator';
-      typingDiv.innerHTML = '<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center flex-shrink-0 mt-0.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="msg-ai rounded-2xl rounded-tl-md px-4 py-3"><div class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-ocean-400 typing-dot"></div><div class="w-2 h-2 rounded-full bg-ocean-400 typing-dot"></div><div class="w-2 h-2 rounded-full bg-ocean-400 typing-dot"></div></div></div>';
+      
+      let indicatorHtml = '';
+      // Se "Think" estiver ativado, mostra um indicador diferente
+      if (activeModes.think) {
+        indicatorHtml = '<div class="msg-ai rounded-2xl rounded-tl-md px-4 py-3 border-ocean-500/30"><div class="flex items-center gap-2 text-ocean-400 text-xs font-medium"><svg class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> IARA esta pensando profundamente...</div></div>';
+      } else {
+        indicatorHtml = '<div class="msg-ai rounded-2xl rounded-tl-md px-4 py-3"><div class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-ocean-400 typing-dot"></div><div class="w-2 h-2 rounded-full bg-ocean-400 typing-dot"></div><div class="w-2 h-2 rounded-full bg-ocean-400 typing-dot"></div></div></div>';
+      }
+      
+      typingDiv.innerHTML = '<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center flex-shrink-0 mt-0.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>' + indicatorHtml;
       chatMsgs.appendChild(typingDiv);
       chatMsgs.scrollTop = chatMsgs.scrollHeight;
       
@@ -848,10 +1000,16 @@
         
         var aiDiv = document.createElement('div');
         aiDiv.className = 'flex items-start gap-3 max-w-2xl';
-        aiDiv.innerHTML = '<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center flex-shrink-0 mt-0.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="msg-ai rounded-2xl rounded-tl-md px-4 py-3 max-w-full"><p class="text-sm text-slate-200 leading-relaxed">' + reply + '</p></div>';
+        
+        let thinkBlock = '';
+        if (activeModes.think) {
+          thinkBlock = '<div class="mb-2 p-2 rounded bg-slate-900/50 border border-slate-700/50 text-xs text-slate-400 font-mono"><span class="text-ocean-500 font-bold">> Processo de raciocinio:</span><br>1. Analisando a intencao do usuario<br>2. Verificando o contexto do sistema<br>3. Gerando resposta apropriada...</div>';
+        }
+
+        aiDiv.innerHTML = '<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-ocean-500 to-ocean-700 flex items-center justify-center flex-shrink-0 mt-0.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="msg-ai rounded-2xl rounded-tl-md px-4 py-3 max-w-full">' + thinkBlock + '<p class="text-sm text-slate-200 leading-relaxed">' + reply + '</p></div>';
         chatMsgs.appendChild(aiDiv);
         chatMsgs.scrollTop = chatMsgs.scrollHeight;
-      }, 1500);
+      }, activeModes.think ? 3000 : 1500); // Demora mais se tiver pensando
     }
 
     function escapeHtml(text) {
