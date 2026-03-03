@@ -1,63 +1,127 @@
-# IARA v2 — Arquitetura "Agentic" Completa e Consolidação (Revisão Pós-Pesquisa)
+# IARA v3 — Arquitetura de Colmeia Distribuída (NOVORUMO)
 
-Este plano unifica as ideias avançadas extraídas dos arquivos da pasta `maisnovo` e as alinha com a infraestrutura atual (Local-First Edge Swarm no Termux via S21 Ultra e S21 FE).
+Este documento mapeia o curso da "Fase V3", integrando uma Malha de Conexão Distribuída entre o Console da IARA e workers Android externos.
 
-## User Review Required
+## User Review Required 
 
-Nenhuma inconsistência pendente. Todas as limitações de hardware e de rede do ecossistema Android/Termux foram resolvidas com estratégias de fallback aprovadas:
-1. **Paralelismo**: Adotada **Fila Estrita Sequencial** (máx. 2 tarefas ativas) no lugar de multiprocessamento irrestrito. Git Worktrees serão usados apenas como ambiente de staging seguro e explícito no **KittyFE (via SSH)**, poupando a RAM do Master.
-2. **Memória Vetorial**: Substituição do inviável ChromaDB/`sqlite-vss` por **Google Gemini Embeddings API + SQLite FTS5 (nativo)** e pure-Python Cosine Similarity, garantindo zero quebras de compilação em ARM.
-3. **Aprovação Ativa**: O **Telegram** continuará sendo a via exclusiva e soberana de aprovação (botões inline). O frontend Web funcionará como painel de histórico e monitoramento passivo.
-4. **Rate Limits**: Implementação de um **Token Bucket nativo** no `llm_router.py` por provedor, rotacionando LLMs gratuitos de acordo com a fase de pipeline, evitando banimentos por "Too Many Requests".
+**Todos os fluxos foram estabilizados e aprovados pelo usuário.** O planejamento está tecnicamente encerrado e as diretrizes arquiteturais para resiliência distribuída foram preenchidas, tampando as lacunas de Visibilidade de Debug, Limites de Custo e IP Dinâmico do VPN.
 
-## Proposed Changes: Fases de Evolução Estrutural
+## Proposed Changes: Fases Adicionais (Ordem de Execução)
 
-### 1. Sistema de "Canais de Mensagem" + Hooks de Defesa
-Em vez de um único fluxo de pensamento, a IARA precisa esconder a "bagunça cognitiva" e se defender contra quebras de segurança.
-- **[MODIFY] `brain.py` e `telegram_bot.py`:**
-  - `analysis` (Privado): Core de pensamento (Chain-of-Thought), planejamento e leitura crua.
-  - `commentary` (Público): Avisos curtos via Telegram/UI (Ex: "*Lendo o arquivo x...*").
-  - `final` (Público): O output formal e definitivo ou solicitações de ações irreversíveis.
-- **[NEW] `hooks.py`:** Eventos estáticos do sistema de onde outras rotinas se penduram.
-  - **Segurança (CRÍTICO)**: `beforeShellExecution` (trava perigos Linux) e `beforeSubmitPrompt` (intercepta credenciais vazadas).
-  - **Memória & Evolução**: `SessionStartHook`, `PreCompactHook` e o fundamental **`SessionEndHook`** (âncora principal do sistema de Instintos).
+### FASE 7: Esqueleto Visual SSE, Quota Diária e HITL Policy (As Lentes do Debug)
+- **Modificações (SSE Skeleton)**: `dashboard_api.py` e Frontend React.
+- Mover a construção do Backend Streamer pro momento M-0. Implementar o endpoint nativo via SSE Yieldings, acompanhado apenas de um componente React temporário. *O frontend nesta fase atuará puramente como um console de linha de comando reativo mostrando o `STATUS: Convocando Conselho`, `THINKING...`, para guiar a visualização remota sem precisarmos da UI bonita da Fase 12 ainda.*
+- **Modificações (Quotas Preventivas)**: `config.py` e `llm_router.py`. Adição da chave `MAX_DAILY_LLM_CALLS = 150`. Barreira nativa antes do dispare paralêlo do `gather` no caso de Conselho ou Loops de Auto_Reflection agressivos.
+- **Preparativo (HITL)**: Instanciaremos o `IARA_HITL_POLICY.md` definindo limites textuais de Ações Seguras / Médias / Críticas antes de programar as suspensões da IARA e do Suborno do Conselho (Fase 10).
 
-### 2. Máquina de Estado Robusta (Stateful Tasking)
-- **[MODIFY] `orchestrator.py` / `core.py`:**
-  - Criar um **TodoWrite System** em SQLite (`tasks_state`).
-  - Regras: `pending` -> `in_progress` -> `completed`.
-  - Apenas **1 tarefa** em `in_progress` por vez. Falhas reinjetam sub-tarefas de autocorreção em vez de apagar o progresso.
+### FASE 8: Roteamento Inteligente (Econômico vs Qualidade)
+- **Modificações**: `brain.py` e `llm_router.py`.
+- **Rápido**: Uso intensivo de provedores ultrarrápidos via flag `require_fast=True`
+- **Escalation Automático (R1)**: A IARA será promovida. Ocorre ativado pelas duas chaves ativas simultaneamente: se a camada Groq der Timeout/Falhar duas vezes (Motivo Técnico) OU se a conversa possuir verbos que exijam complexidade semântica explícita (Motivo Intelectual), abandona a camada rasteira e engaja o DeepSeek R1 no OpenRouter ativamente.
 
-### 3. Plan Mode Toggle & Sistema "Council" Deliberativo
-Trava anti-ansiedade que evita a IARA de sair codificando loucamente e quebrando a base.
-- **[NEW Tools]** `EnterPlanMode` e `ExitPlanMode` integrados fortemente ao **Council**:
-  - Antes do código, sub-agentes do Conselho Deliberativo (`Planner`, `Architect`, `Security`) debatem a solução ideal usando a ferramenta `Explore` (grep/glob no código).
-  - O documento gerado (`plan.md`) requer aprovação explícita pelo Telegram.
+### FASE 9: Conexão Neural Dinâmica (Tailscale VPN) & Resiliência
+- **Modificações**: `config.py`, `worker_protocol.py`, API Caller.
+- **Teste Empírico de Descoberta**: Antes do Agent escrever o protocolo, geraremos um minisscript Ping Test. Esse script irá recuperar dinamicamente o IP pela API (`/api/v2/tailnet/-/devices`) e tentar pingar a rota SSH do S21 FE isoladamente. Apenas mediante esse ping pass-tru, implementamos o Bind no código final.
+- **Transporte Físico (SCP)**: Tarefas analíticas exigindo parsing físico despacharão arquivos `scp -P 2022 arquivo target@$DYNAMIC_IP`.
+- **Recuperação de Hardware Amnesia**: Polling ativo em sub-trabalhadores recuperará respostas se o Master S21 Ultra for morto pelo Android OOM killer no meio da análise de dados de 15 minutos do feixe escravo.
+- **Kill Switch Integral**: CancellationToken backend propagará `ssh pkill -f` limpando completamente tarefas remanescentes no FE quando estouradas pelo Board UI.
 
-### 4. Execução em Cascata de 5 Fases
-O novo coração do pipeline. Tarefas complexas seguem esta roteirização obrigatória (roteando LLMs conforme o custo-benefício via Token Bucket):
-1. `RESEARCH` -> Produz `research-summary.md` no tmp.
-2. **`PLAN` (Council Delibera)** -> Gera o `plan.md` com arquitetura inicial e suspende no Telegram.
-3. `IMPLEMENT` -> Executado sequencialmente + TDD.
-4. **`REVIEW` (Council Ataca)** -> Sub-agentes `Code Reviewer`, `Security Reviewer` e `Auditor` formam o Red/Blue Team e geram `review-comments.md`. Se crítico, trava.
-5. `VERIFY` -> Build resolver confirma a execução.
+### FASE 10: Conselho Limitado (Presidente + Red vs Blue Team)
+- **Modificações**: `pipeline.py` e `orchestrator.py`.
+- Nova intenção: "council", onde chamamos `asyncio.gather`.
+- **Human Inversion**: Limite preventivo. Presidente com 3 chances para o consenso de projeto. Red Team vs Blue Team com 2 tentativas de escrita de arquivos antes da IARA parar ativamente e clamar aprovação/correção do Telegram com base nos Níveis High Risk da Policy HITL gerada.
 
-### 5. Memória (RAG Melhorado) e Instintos Contínuos
-Reforma do `CONTEXTO_IA.md` e injeção semântica evolutiva.
-- **Configuração da Injeção (4 Camadas)**: Metadados, Preferências, Tópicos e Conteúdo Recente inseridos estrategicamente sob demanda.
-- **Aprendizado Contínuo (Instintos)**:
-  - O **`SessionEndHook`** extrai "o que funcionou/falhou" gerando anotações com "Confidence Score".
-  - **Critério de Evolução**: Acumular 3+ instintos similares com score >= 0.7 faz com que o agente os agrupe e crie automaticamente um `SKILL.md` na pasta `skills/`.
-  - **Âncora de Execução**: Esse ciclo pesado de promoção (Instinto -> Skill) não roda no runtime principal, ele tira proveito do **loop noturno das 3h da manhã já existente no `memory_core_skill.py`**, que ganha assim seu segundo grande papel (fazer o fechamento diário e evoluir habilidades).
+### FASE 11: Extensão de Nuvem e Código Híbrido (WASM/E2B)
+- **Modificações**: Criar `skills/e2b_sandbox_skill.py`, atualizar `requirements.txt`.
+- Híbrido ativado: Tarefas massivas de machine learning ou alto risco forçam envio para o `E2B SDK`. Tarefas limpas nativas permanecem no Proot local via Shadow_Skill.
+- **Integração E2B Code Interpreter**: A skill iniciará uma Sandbox efêmera na nuvem (`e2b_code_interpreter`), enviará o código contendo processamento pesado (pandas/matplotlib).
+- **Extração Cloud (Base64)**: Capturar os artefatos visuais plotados (`results[0].png` ou `base64`), embutir numa string contendo a imagem em base64 e retornar. Assim, o backend repassará a imagem gerada na nuvem via SSE Stream direto pro Dashboard Web.
+
+### FASE 12: Memória Contextual Orientada a Objeto (Full Stack Projects)
+Esta fase adota a estratégia "Isolation First, Semantic RAG Second".
+
+**Etapa 1: Project Isolation (Isolamento Lógico)**
+- **Modificações (DB Schema)**: `core.py`
+  - Criar tabela `projects` (id, name, description, created_at).
+  - Criar tabela `app_config` (key, value) para armazenar `active_project_id`.
+  - Adicionar coluna `project_id (DEFAULT NULL)` nas tabelas `history` (working_memory), `core_memory` e `episodic_memory`. 
+    - *Atenção (Migração)*: `NULL` será tratado como o "Escopo Global". Qualquer histórico legado pertencerá nativamente ao global.
+- **Modificações (Backend Logic - core.py Refatoração Massiva)**:
+  - `save_message()`: Adicionar `project_id`.
+  - `get_conversation()`: `WHERE project_id = ? OR project_id IS NULL`.
+  - `save_core_fact()`: Adicionar `project_id`.
+  - `get_core_memory()`: Filtrar por projeto.
+  - `compact_working_memory()`: Propagar `project_id` na sumariação do episódio.
+  - `save_episode()`: Adicionar `project_id`.
+- **Modificações (Backend Logic - Rotas e Controllers)**: `brain.py`, `dashboard_api.py`, `telegram_bot.py`
+  - `brain.py`: Ler `active_project_id` da `app_config` no início de `process_message()`. Isso sincroniza Telegram e React no mesmo escopo ativo da memória.
+  - `telegram_bot.py`: Criar handler `/projeto [nome]` que cria/seta o escopo na Tabela `app_config`.
+  - `dashboard_api.py`: Expor `GET /api/projects` e `POST /api/projects/activate/{id}` atualizando `app_config`.
+- **Modificações (Frontend React)**: 
+  - Adicionar Dropdown `<ProjectSelector>` no Header chamando o endpoint de ativação. Isso garante que a UI comande e reflita a mesma Engine de Estado (`app_config`) lida pela IARA.
+
+**Etapa 2: Semantic RAG (Embeddings Assíncronos no Alvo Certo)**
+- **Geração (Background)**: Ao salvar dados na `core_memory` e na `episodic_memory`, gerar embeddings via **Cohere** (`cohere.Client`) de forma **assíncrona** (`asyncio.create_task`) para não onerar o loop de conversa. Salvar como BLOB. A `working_memory` NÃO receberá embeddings pois já é lida em RAW text via Context Window.
+- **Recuperação (RAG)**: Ao processar nova mensagem (no início de `process_message()`), usar a API Cohere para gerar o **embedding da query do usuário** em tempo real. Passar essa query embeddada (junto do texto) para a `build_system_prompt()`. Dentro dela, fazer Cosine Similarity no Python (sobre a `episodic_memory` e `core_memory` **filtradas** pelo `project_id`) e injetar apenas os TOP-3 episódios e top fatos no prompt. Redução drástica de latência de chamadas!
 
 ## Verification Plan
 
-### Automated Tests
-1. Testar se as mensagens do canal `analysis` ficam efetivamente mascaradas do banco do frontend e envios de requisição do Telegram (certificando-se de que não estamos gastando tokens enviando lixo via rede).
-2. Forçar execução de comando de deleção proibido (`rm -rf`) via bash agent para garantir que o `beforeShellExecution` em `hooks.py` barre antes do Subprocess ser invocado.
-3. Validar busca semântica do RAG utilizando SQLite FTS5 indexado pelo BM25 nativo.
+### Testes Automáticos
+- Disparar requisições contínuas simuladas para violar a trave de segurança da `Quotas (Rate Limiter)` e atestar o desligamento gentil limitando budget diário de Tokens.
+- Validar se APIs públicas do Tailscale respondem localmente de forma agnóstica sem interceptação da Rede 4G rodando o Ping Script da Fase 9.
 
-### Manual Verification
-1. Criar e autorizar uma tarefa destrutiva que passará pelas 5 Fases. Observar se o roteador de modelos no Console troca a _engine_ ativa baseando-se no `task_type` de acordo com a fase (`gemini` -> `cerebras` -> `kimi` -> etc), acionando o Backoff do Token Bucket se necessário.
-2. Interceptar a `Fase 4 (REVIEW)` simulando a injeção manual de um token/senha falsa na UI. Confirmar se o `beforeSubmitPrompt` paralisa e alerta, como planejado no Red Team Audit.
-3. **Teste do Ciclo de Instintos (Fase 5)**: Simular uma sessão onde um padrão repetitivo é ensinado. Validar se o `SessionEndHook` gerou o micro-arquivo de instinto no final. Repetir isso 3 vezes simuladas e acionar manualmente o script das 3h da manhã (`memory_core_skill.py`) para confirmar se o agrupamento gerou corretamente um novo arquivo `.md` na pasta `skills/`.
+### FASE 13: Function Calling (Tool Use Formal)
+O objetivo desta fase é abandonar as frágeis listas de keywords na detecção de "intent" e abraçar o uso nativo de *Function Calling* (modelo OpenAI-compatible) para rotear intents, mantendo o fallback resiliente para as keywords legadas em provedores menos granulares.
+
+**1. Centralização (tools_registry.py)**
+- Criar o arquivo `tools_registry.py` contendo a lista unificada de schemas JSON para todas as funções (`web_search`, `deep_research`, `save_memory`, `recall_memory`, `get_weather`, `get_system_status`, `set_reminder`, `toggle_flashlight`, `get_location`, `read_url`, `run_sandbox`, `swarm_delegate`, `deep_research_council`).
+
+**2. Preparação do LLM Router (llm_router.py)**
+- Adaptar o `LLMRouter.generate()` para aceitar o kwarg estrito `tools`.
+- Quando um provedor sinalizar *tool_calls* via `finish_reason`, mapear e extrair o `name` e processar a desserialização do JSON de `arguments`, retornando padronizado como `{"tool": nome, "args": {...}}`.
+- Provedores incompatíveis com Function Calling (Ex: Cerebras) irão naturalmente ignorar este array.
+
+**3. Inteligência Híbrida (brain.py)**
+- Criar nova pipe principal `classify_intent_with_tools(text, router)` invocando `router.generate` sob *require_fast=True*.
+- Tratar o dict gerado e rotear na mesma estrutura legada `("intent", query)` que já alimenta `execute_tools()`.
+- **Mapeamento Crítico (Tool → Intent)**: Como `execute_tools()` espera uma tupla legada, será implementado o seguinte conversor:
+  - `web_search`          → `("search",   args["query"])`
+  - `deep_research`       → `("deep_research", args["query"])`
+  - `save_memory`         → `("save_memory",   args["content"])`
+  - `recall_memory`       → `("recall_memory", None)`
+  - `get_weather`         → `("weather",  None)`
+  - `get_system_status`   → `("status",   None)`
+  - `set_reminder`        → `("reminder", args["message"] + " " + args["time_expression"])`
+  - `toggle_flashlight`   → `("flashlight", args["state"])`
+  - `get_location`        → `("location", None)`
+  - `read_url`            → `("url_read", args["url"])`
+  - `run_sandbox`         → `("sandbox",  args["task_description"])`
+  - `swarm_delegate`      → `("swarm",    args["task"])`
+  - `deep_research_council` → `("council", args["query"])`
+- Criar rotina formal de *Try/Except* que degrada a leitura para a função purista velha de `classify_intent()` garantindo retrocompatibilidade 100%.
+- Adicionar no bloco de comandos especiais o `/tools`, permitindo ver as descrições em tela do *tools_registry*.
+
+### FASE 14: Agência Autônoma (Background Scheduler)
+O objetivo desta fase é criar uma rotina ativa onde a IARA age por conta própria, não dependendo puramente de "ações reativas" desencadeadas pelo usuário. Um scheduler assíncrono nativo rodará silenciosamente no Termux disparando ações utilitárias (Morning Briefing, Consolidação) ou pesquisas autônomas.
+
+**1. Motor de Agendamento (scheduler.py)**
+- Implementar Loop `asyncio` (`while True: await asyncio.sleep(60)`) purista para compatibilidade máxima com ARM/Termux (sem APScheduler).
+- Suporte a dois modos: Horário Absoluto ("HH:MM") que garante `last_run.date() != today.date()` e Intervalos Relativos ("interval:15m") com TimeDeltas.
+- **Ações Nativas**: `morning_briefing` (News/Previsão), `session_end_hook` (Reflexão), `memory_consolidation` (Limpeza Core), `custom_search`.
+
+**2. Persistência de Jobs (core.py)**
+- Atualizar `init_db()` para criar `scheduled_jobs` (`id, name, cron, action, params, enabled, last_run, created_at`).
+- Modelagem de acesso atômico com métodos associados: `add_scheduled_job`, `get_all_scheduled_jobs`, `update_job_last_run`, `toggle_job`, `delete_scheduled_job`.
+
+**3. Interface de Controle (brain.py)**
+- Implementar namespace de comandos `/cron` dentro de `process_message`:
+  - `/cron list`: Visibilidade da tabela de agendamentos.
+  - `/cron add [nome] [cron] [acao] [params]`: Adição on-the-fly.
+  - `/cron toggle [nome]`: Liga/Desliga sem deletar a recorrência cronológica.
+  - `/cron remove [nome]`: Exclusão.
+  - `/cron run [nome]`: Disparo forçado ignorando o relógio.
+
+**4. Acoplamento & Vida Independente (brain.py & telegram_bot.py)**
+- Expor `send_proactive_message(text)` que utilize o `_reminder_chat_id` persistido para que o scheduler possa notificar ativamente o criador por Fora da `process_message`, sem context window (Ex: Morning Briefing acorda o usuário proativamente).
+- Acoplar `asyncio.create_task(scheduler.start_scheduler(send_proactive_message))` no endpoint de Startup do sistema.
+- Se a tabela estiver vazia na migração, criar `morning_briefing` (08:00) e `session_end_hook` (23:30) em modo `enabled=0` (Desligados) aguardando ativação via `/cron toggle`.
