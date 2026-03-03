@@ -957,11 +957,17 @@ async def get_active_task() -> dict | None:
     """Busca a única tarefa permitida em in_progress."""
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM tasks_state WHERE status = 'in_progress' ORDER BY id ASC LIMIT 1"
-        )
+        cursor = await db.execute("SELECT * FROM tasks_state WHERE status = 'in_progress'")
         row = await cursor.fetchone()
         return dict(row) if row else None
+
+async def _get_all_tasks() -> list[dict]:
+    """Retorna todas as tarefas (pending, in_progress, completed) para o scheduler montar briefs."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM tasks_state ORDER BY id ASC")
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
 
 async def set_task_status(task_id: int, status: str):
     """Atualiza o status de uma tarefa na máquina de estados."""
