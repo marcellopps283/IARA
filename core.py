@@ -137,6 +137,21 @@ async def init_db():
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        
+        # Tabela do Agendador Autônomo (Phase 14)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                cron TEXT NOT NULL,
+                action TEXT NOT NULL,
+                params TEXT DEFAULT '{}',
+                enabled INTEGER DEFAULT 1,
+                last_run DATETIME DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
         await db.commit()
 
 
@@ -871,14 +886,72 @@ async def update_swarm_job_status(job_id: int, status: str, result: str = None):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 async def add_task_state(description: str) -> int:
-    """Adiciona uma tarefa na máquina de estados."""
+    """Cria uma tarefa (TODO) no bd."""
     async with aiosqlite.connect(str(config.DB_PATH)) as db:
-        cursor = await db.execute(
-            "INSERT INTO tasks_state (description) VALUES (?)",
-            (description,)
-        )
+        cursor = await db.execute("INSERT INTO tasks_state (description) VALUES (?)", (description,))
         await db.commit()
         return cursor.lastrowid
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Background Scheduler (Phase 14)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def add_scheduled_job(name: str, cron: str, action: str, params: dict | None = None, enabled: bool = True) -> int:
+    """Insere ou atualiza um job autônomo na tabela."""
+    import json
+    params_str = json.dumps(params or {})
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        cursor = await db.execute("""
+            INSERT INTO scheduled_jobs (name, cron, action, params, enabled)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(name) DO UPDATE SET
+                cron = excluded.cron,
+                action = excluded.action,
+                params = excluded.params,
+                enabled = excluded.enabled
+        """, (name, cron, action, params_str, 1 if enabled else 0))
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_all_scheduled_jobs() -> list[dict]:
+    """Retorna a lista completas de jobs configurados."""
+    import json
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM scheduled_jobs ORDER BY id ASC")
+        rows = await cursor.fetchall()
+        jobs = []
+        for r in rows:
+            d = dict(r)
+            d["params"] = json.loads(d["params"])
+            d["enabled"] = bool(d["enabled"])
+            jobs.append(d)
+        return jobs
+
+async def update_job_last_run(job_id: int):
+    """Atualiza o stamp de última execução de um job."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        await db.execute("UPDATE scheduled_jobs SET last_run = CURRENT_TIMESTAMP WHERE id = ?", (job_id,))
+        await db.commit()
+
+async def toggle_job(name: str) -> bool:
+    """Inverte o status ativo/inativo de um job. Retorna o novo estado."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        cursor = await db.execute("SELECT enabled FROM scheduled_jobs WHERE name = ?", (name,))
+        row = await cursor.fetchone()
+        if not row:
+            raise ValueError(f"Job '{name}' não encontrado.")
+        new_state = 0 if row[0] else 1
+        await db.execute("UPDATE scheduled_jobs SET enabled = ? WHERE name = ?", (new_state, name))
+        await db.commit()
+        return bool(new_state)
+
+async def delete_scheduled_job(name: str) -> bool:
+    """Deleta permanentemente um job do banco."""
+    async with aiosqlite.connect(str(config.DB_PATH)) as db:
+        cursor = await db.execute("DELETE FROM scheduled_jobs WHERE name = ?", (name,))
+        await db.commit()
+        return cursor.rowcount > 0
 
 async def get_active_task() -> dict | None:
     """Busca a única tarefa permitida em in_progress."""

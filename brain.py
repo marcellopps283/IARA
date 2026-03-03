@@ -22,6 +22,7 @@ logger = logging.getLogger("brain")
 import config
 import core
 import tools_registry
+import scheduler
 import web_search
 import deep_research
 import doc_reader
@@ -654,6 +655,70 @@ async def process_message(text: str, message):
         await telegram_bot.send_simple_message(chat_id, msg)
         return
 
+    # Comandos de Scheduler (Phase 14)
+    elif text_lower.startswith("/cron"):
+        parts = text.strip().split(maxsplit=4)
+        cmd = parts[1].lower() if len(parts) > 1 else "list"
+        
+        if cmd == "list":
+            jobs = await core.get_all_scheduled_jobs()
+            if not jobs:
+                await telegram_bot.send_simple_message(chat_id, "Nenhum job agendado.")
+            else:
+                msg = "📅 **Jobs Autônomos (Background Scheduler):**\n\n"
+                for j in jobs:
+                    status = "🟢 ON" if j["enabled"] else "🔴 OFF"
+                    msg += f"**{j['name']}** ({status})\n- Cron: `{j['cron']}`\n- Action: `{j['action']}`\n- Last: {j['last_run']}\n\n"
+                await telegram_bot.send_simple_message(chat_id, msg)
+        elif cmd == "add" and len(parts) == 5:
+            # parts = ['/cron', 'add', 'nome', 'cron', 'acao param1...']
+            action_params = parts[4].split(maxsplit=1)
+            action = action_params[0]
+            params = {}
+            if len(action_params) > 1:
+                import json
+                try:
+                    params = json.loads(action_params[1])
+                except:
+                    pass
+            await core.add_scheduled_job(parts[2], parts[3], action, params)
+            await telegram_bot.send_simple_message(chat_id, f"✅ Job '{parts[2]}' cadastrado com sucesso.")
+        elif cmd == "toggle" and len(parts) >= 3:
+            name = parts[2]
+            try:
+                new_state = await core.toggle_job(name)
+                status = "🟢 ATIVADO" if new_state else "🔴 DESATIVADO"
+                await telegram_bot.send_simple_message(chat_id, f"✅ Job '{name}' foi {status}.")
+            except ValueError as e:
+                await telegram_bot.send_simple_message(chat_id, f"⚠️ Erro: {e}")
+        elif cmd == "remove" and len(parts) >= 3:
+            name = parts[2]
+            removed = await core.delete_scheduled_job(name)
+            if removed:
+                await telegram_bot.send_simple_message(chat_id, f"🗑️ Job '{name}' removido.")
+            else:
+                await telegram_bot.send_simple_message(chat_id, f"⚠️ Job '{name}' não existe.")
+        elif cmd == "run" and len(parts) >= 3:
+            name = parts[2]
+            jobs = await core.get_all_scheduled_jobs()
+            job = next((j for j in jobs if j["name"] == name), None)
+            if job:
+                await telegram_bot.send_simple_message(chat_id, f"⚡ Forçando execução de '{name}'...")
+                asyncio.create_task(scheduler.execute_action(job, send_proactive_message))
+                await core.update_job_last_run(job["id"])
+            else:
+                await telegram_bot.send_simple_message(chat_id, f"⚠️ Job '{name}' não encontrado.")
+        else:
+            await telegram_bot.send_simple_message(chat_id, (
+                "📅 **Comandos do Scheduler:**\n"
+                "`/cron list`\n"
+                "`/cron add [nome] [cron] [acao] [params_json]`\n"
+                "`/cron toggle [nome]`\n"
+                "`/cron remove [nome]`\n"
+                "`/cron run [nome]`"
+            ))
+        return
+
     # Plan Mode Lock
     elif text_lower in ("/plan on", "/planmode on"):
         await telegram_bot.send_channel_message(chat_id, "🔒 **EnterPlanMode**: Agente bloqueado para edição. Apenas pesquisas e arquitetura permitidas.", channel="commentary")
@@ -1193,6 +1258,15 @@ async def main():
     asyncio.create_task(_heartbeat_and_compaction_loop())
     asyncio.create_task(_memory_consolidation_loop())
     
+    # Phase 14: Popular Banco Virgem de Jobs e Iniciar Loop Autônomo
+    jobs_db = await core.get_all_scheduled_jobs()
+    if not jobs_db:
+        await core.add_scheduled_job("morning_briefing", "08:00", "morning_briefing", enabled=False)
+        await core.add_scheduled_job("session_end_hook", "23:30", "session_end_hook", enabled=False)
+        logger.info("📅 Jobs autônomos padrão criados e prontos para ativação.")
+        
+    asyncio.create_task(scheduler.start_scheduler(send_proactive_message))
+
     # Executa Hook de inicialização
     await hooks.on_session_start(0)
 
