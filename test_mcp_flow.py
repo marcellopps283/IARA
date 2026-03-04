@@ -1,35 +1,19 @@
 import asyncio
-import mcp_client
-from core import init_db
+from mcp.client.session import ClientSession
+from mcp.client.sse import sse_client
+import httpx
 
-async def run_mcp_test():
-    print("Iniciando DB...")
-    await init_db()
-    
-    # 1. Checando status vazio
-    print("\n--- Status Inicial ---")
-    status = await mcp_client.get_status_report()
-    print(status)
-    
-    # 2. Adicionando um servidor fake
-    print("\n--- Adicionando Servidor Fake ---")
-    await mcp_client.register_server("fake_browser_mcp", "http://localhost:3000/mcp")
-    
-    # 3. Listando
-    servers = await mcp_client.get_all_servers()
-    print("Servidores no banco:", servers)
-    
-    # 4. Checando status agora (vai tentar fazer o list_tools que deve falhar pois localhost:3000 nao existe, 
-    # testando a resiliência a errors).
-    print("\n--- Status Com Servidor Registrado (Offline Esperado) ---")
-    status = await mcp_client.get_status_report()
-    print(status)
-    
-    # 5. Removendo
-    print("\n--- Removendo Servidor ---")
-    await mcp_client.remove_server("fake_browser_mcp")
-    servers = await mcp_client.get_all_servers()
-    print("Servidores no banco apos remocao:", servers)
-    
+async def try_mcp(url: str):
+    print(f"Trying {url}")
+    try:
+        async with sse_client(url, httpx.AsyncClient(timeout=5.0)) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                print("TOOLS:", tools)
+    except Exception as e:
+        print("Error:", e)
+        
 if __name__ == "__main__":
-    asyncio.run(run_mcp_test())
+    asyncio.run(try_mcp("http://localhost:3000/mcp"))
+
