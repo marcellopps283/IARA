@@ -147,6 +147,9 @@ class LLMRouter:
 
         last_error = None
         target_providers = self._sort_providers_for_task(task_type, bool(tools), require_fast=require_fast)
+        if not target_providers and task_type == "vision":
+            return "Visão não disponível: GEMINI_API_KEY ausente ou Gemini fora do ar. Descreva a imagem em texto."
+            
         if force_provider:
             forced = [p for p in self.providers if p["name"] == force_provider]
             if forced:
@@ -247,6 +250,10 @@ class LLMRouter:
         check_and_increment_quota()
         
         target_providers = self._sort_providers_for_task(task_type, False, require_fast=require_fast)
+        if not target_providers and task_type == "vision":
+            yield "Visão não disponível: GEMINI_API_KEY ausente ou Gemini fora do ar. Descreva a imagem em texto."
+            return
+            
         if force_provider:
             forced = [p for p in self.providers if p["name"] == force_provider]
             if forced:

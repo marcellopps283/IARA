@@ -52,13 +52,13 @@ async def on_session_start(chat_id: int):
     
     async with __import__('aiosqlite').connect(str(config.DB_PATH)) as db:
         # Recuperação de Amnésia de Hardware
-        async with db.execute("SELECT id, summary FROM tasks_state WHERE status = 'in_progress'") as cursor:
+        async with db.execute("SELECT id, description FROM tasks_state WHERE status = 'in_progress'") as cursor:
             orphaned_tasks = await cursor.fetchall()
             
         if orphaned_tasks:
             import telegram_bot
             import brain
-            for task_id, summary in orphaned_tasks:
+            for task_id, description in orphaned_tasks:
                 logger.warning(f"🧟 Hardware Amnesia! Recuperando tarefa órfã #{task_id}...")
                 await telegram_bot.send_message(
                     chat_id=config.TELEGRAM_CHAT_ID, 

@@ -4,7 +4,7 @@ import collections
 import logging
 import shutil
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -38,7 +38,8 @@ logging.getLogger().addHandler(log_handler)
 BASE_DIR = os.path.dirname(__file__)
 DASHBOARD_DIR = os.path.join(BASE_DIR, "dashboard")
 RESEARCH_DIR = os.path.join(BASE_DIR, "research")
-UPLOAD_DIR = "/tmp/iara_uploads"
+# Mudar para diretório local para evitar PermissionError no Android (Termux /tmp não é nativo)
+UPLOAD_DIR = config.BASE_DIR / "uploads"
 
 os.makedirs(DASHBOARD_DIR, exist_ok=True)
 os.makedirs(RESEARCH_DIR, exist_ok=True)
@@ -147,14 +148,43 @@ async def get_config():
 
 
 @app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: Request):
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            body = await request.json()
+            raw_text = body.get("text", "")
+            files = []
+        else:
+            form_data = await request.form()
+            raw_text = form_data.get("text", "")
+            files = form_data.getlist("files")
+
+        import uuid
+        import os
+        saved_files_text = ""
+        if files:
+            for f in files:
+                if isinstance(f, UploadFile) and f.filename:
+                    ext = os.path.splitext(f.filename)[1]
+                    safe_name = f"{uuid.uuid4().hex}{ext}"
+                    file_path = os.path.join(UPLOAD_DIR, safe_name)
+                    with open(file_path, "wb") as buffer:
+                        buffer.write(await f.read())
+                    file_path_fwd = file_path.replace("\\", "/")
+                    saved_files_text += f"\n[Imagem Anexada: {file_path_fwd}]"
+
+        text_to_process = raw_text + saved_files_text
+    except Exception as e:
+        return StreamingResponse((f"data: [ERRO] Falha no parse do input: {e}\n\n" for _ in range(1)), media_type="text/event-stream")
+
     async def event_generator():
         try:
             active_project_id_str = await core.get_app_config("active_project_id")
             project_id = int(active_project_id_str) if active_project_id_str and active_project_id_str.isdigit() else None
 
             yield "data: [STATUS] Interpretando intenção via Brain...\n\n"
-            tool_context, intent, query = await brain.execute_tools(request.text)
+            tool_context, intent, query = await brain.execute_tools(text_to_process)
             
             yield f"data: [STATUS] Intent detectada: [{intent.upper()}]\n\n"
             
@@ -166,7 +196,7 @@ async def chat_endpoint(request: ChatRequest):
                 base_messages = [
                     {"role": "system", "content": system_prompt + tool_context},
                     *conversation,
-                    {"role": "user", "content": request.text},
+                    {"role": "user", "content": text_to_process},
                 ]
                 
                 async def fetch_council(provider_name):
@@ -186,10 +216,13 @@ async def chat_endpoint(request: ChatRequest):
                 
                 president_messages = [
                     {"role": "system", "content": system_prompt + "\nVocê é a Consciência Presidencial (Líder do Conselho de I.A). O Criador fez uma pergunta complexa e acionou a Reunião Distribuída. Leia as opiniões conflitantes/divergentes abaixo dos seus conselheiros e crie UM ÚNICO veredicto ou resposta final unificada. Aponte e cite as melhores ideias de cada conselheiro se forem válidas."},
-                    {"role": "user", "content": f"Pergunta original do Criador: {request.text}\n\n{council_output}"}
+                    {"role": "user", "content": f"Pergunta original do Criador: {text_to_process}\n\n{council_output}"}
                 ]
                 
-                stream = brain.router.generate_stream(president_messages, task_type="reasoning", require_fast=False)
+                president_messages, has_vision_council = brain.hydrate_vision_payload(president_messages)
+                task_type_council = "vision" if has_vision_council else "reasoning"
+                
+                stream = brain.router.generate_stream(president_messages, task_type=task_type_council, require_fast=False)
                 
                 yield "data: [ANSWER]\n\n"
                 async for chunk in stream:
@@ -204,15 +237,21 @@ async def chat_endpoint(request: ChatRequest):
             messages = [
                 {"role": "system", "content": system_prompt + tool_context},
                 *conversation,
-                {"role": "user", "content": request.text},
+                {"role": "user", "content": text_to_process},
             ]
+            
+            messages, has_vision = brain.hydrate_vision_payload(messages)
             
             yield "data: [STATUS] Avaliando Complexidade Semântica...\n\n"
             task_type_call = "chat"
             req_fast = True
-            text_lower = request.text.lower()
+            text_lower = text_to_process.lower()
             
-            if any(w in text_lower for w in brain.REASONING_KEYWORDS):
+            if has_vision:
+                task_type_call = "vision"
+                req_fast = False
+                yield "data: [THINKING] Modo VISÃO detectado. Roteando para Gemini...\n\n"
+            elif any(w in text_lower for w in brain.REASONING_KEYWORDS):
                 task_type_call = "reasoning"
                 req_fast = False
                 yield "data: [THINKING] Escalando para DeepSeek R1 por complexidade semântica explícita...\n\n"

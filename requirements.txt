@@ -18,6 +18,7 @@ ddgs>=6.0
 # Dashboard Web
 fastapi>=0.110.0
 uvicorn>=0.29.0
+python-multipart>=0.0.9
 
 # Config & Utils
 python-dotenv>=1.0

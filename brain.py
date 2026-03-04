@@ -8,6 +8,9 @@ import json
 import logging
 import re
 import sys
+import base64
+import mimetypes
+import os
 from datetime import datetime, timedelta
 import hooks
 
@@ -33,6 +36,8 @@ from llm_router import LLMRouter
 import threading
 import dashboard_api
 import orchestrator
+import mcp_client
+import re
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -112,6 +117,84 @@ SANDBOX_KEYWORDS = ["sandbox", "e2b", "nuvem", "cloud", "gráfico", "plot", "cod
 
 # Regex para detectar URLs
 URL_REGEX = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+')
+
+# Regex para detectar Imagens Anexadas (Vision)
+VISION_REGEX = re.compile(r"\[Imagem Anexada:\s*(.+?)\]")
+
+
+def hydrate_vision_payload(messages: list[dict]) -> tuple[list[dict], bool]:
+    """
+    Substitui as tags de imagens lógicas pelos arrays Base64 formatados para OpenAI Vision.
+    Apenas hidrata as imagens presentes nas últimas 2 mensagens para evitar estouro de tokens.
+    Imagens antigas são substituídas por um texto descritivo simples.
+    Retorna (mensagens_hidratadas, has_vision).
+    """
+    hydrated = []
+    has_vision = False
+    
+    # Define limiar para considerar como "recente" (apenas as últimas 2 mensagens do array)
+    recent_threshold = len(messages) - 2
+
+    for i, msg in enumerate(messages):
+        if not isinstance(msg.get("content"), str):
+            hydrated.append(msg)
+            continue
+            
+        text_content = msg["content"]
+        matches = VISION_REGEX.findall(text_content)
+        
+        if not matches:
+            hydrated.append(msg)
+            continue
+            
+        # Se for mensagem antiga, substitui a tag por um aviso leve em texto
+        if i < recent_threshold:
+            clean_text = VISION_REGEX.sub("[Imagem enviada anteriormente neste ponto da conversa. A.I. já analisou o contexto.]", text_content).strip()
+            hydrated.append({
+                "role": msg["role"],
+                "content": clean_text
+            })
+            continue
+
+        has_vision = True
+        clean_text = VISION_REGEX.sub("", text_content).strip()
+        
+        content_array = []
+        if clean_text:
+            content_array.append({"type": "text", "text": clean_text})
+        else:
+            content_array.append({"type": "text", "text": "Por favor analise a imagem anexada."})
+            
+        for path in matches:
+            try:
+                if os.path.exists(path):
+                    with open(path, "rb") as bf:
+                        img_b64 = base64.b64encode(bf.read()).decode("utf-8")
+                    mime_type, _ = mimetypes.guess_type(path)
+                    if not mime_type:
+                        mime_type = "image/jpeg"
+                    
+                    content_array.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{img_b64}"
+                        }
+                    })
+                else:
+                    logger.warning(f"File not found for vision payload: {path}")
+            except Exception as e:
+                logger.error(f"Error hydrating vision payload for {path}: {e}")
+                
+        # Só substitui se hidratou imagens com sucesso
+        if len(content_array) > 1 or (len(content_array) == 1 and content_array[0]["type"] == "image_url"):
+            hydrated.append({
+                "role": msg["role"],
+                "content": content_array
+            })
+        else:
+            hydrated.append(msg)
+            
+    return hydrated, has_vision
 
 
 async def classify_intent(text: str, router: LLMRouter) -> tuple[str, str | None]:
@@ -234,10 +317,31 @@ async def classify_intent_with_tools(text: str, router: LLMRouter) -> tuple[str,
         {"role": "system", "content": "Você é o núcleo de classificação de comandos da IARA. Seu trabalho é ler a intenção do usuário e invocar a ferramenta mais adequada. Se for papo furado ou nenhuma tool se encaixar perfeitamente, não chame tools, apenas retorne texto vazio."},
         {"role": "user", "content": text}
     ]
+    active_tools = list(tools_registry.TOOLS_REGISTRY)
     
+    # Heurística Rápida (Lazy Loading) para evitar Token Bloat
+    mcp_keywords = r"\b(acessa|abre|navega|arquivo|repositório|executa|pesquisa|leia|baixa|github|mcp)\b"
+    if re.search(mcp_keywords, text, re.IGNORECASE):
+        logger.info("Detectada intenção de uso externo. Carregando ferramentas MCP disponíveis...")
+        mcp_tools = await mcp_client.list_tools()
+        for mt in mcp_tools:
+            # Assinatura unificada: mcp__{server_name}__{tool_name}
+            safe_server_name = str(mt.get("mcp_server", "unknown")).replace("-", "_")
+            safe_tool_name = str(mt.get("name", "tool")).replace("-", "_")
+            tool_id = f"mcp__{safe_server_name}__{safe_tool_name}"
+            
+            active_tools.append({
+                "type": "function",
+                "function": {
+                    "name": tool_id,
+                    "description": mt.get("description", f"Ferramenta externa do servidor {safe_server_name}"),
+                    "parameters": mt.get("inputSchema", {"type": "object", "properties": {}})
+                }
+            })
+
     response = await router.generate(
         messages=messages,
-        tools=tools_registry.TOOLS_REGISTRY,
+        tools=active_tools,
         task_type="tools",
         require_fast=True  # Preferência Groq
     )
@@ -275,6 +379,10 @@ async def classify_intent_with_tools(text: str, router: LLMRouter) -> tuple[str,
             return ("swarm", args.get("task"))
         elif tool == "deep_research_council":
             return ("council", args.get("query"))
+        elif tool.startswith("mcp__"):
+            parts = tool.split("__", 2)
+            if len(parts) == 3:
+                return ("mcp", {"server_name": parts[1], "tool_name": parts[2], "args": args})
             
     # Se não retornou dicionário de tool válida, acionamos um TypeError para o fallback entrar em ação
     raise ValueError("Nenhuma tool explícita foi invocada pelo LLM.")
@@ -517,6 +625,7 @@ async def execute_tools(text: str) -> tuple[str, str, str | None]:
         if isinstance(generated_code, str):
             generated_code = generated_code.replace("```python", "").replace("```", "").strip()
             
+        if generated_code:
             # Carrega e aciona a Skill Oficial Declarativa
             from skills.e2b_sandbox_skill import execute as e2b_execute
             sandbox_result = await e2b_execute({"code": generated_code})
@@ -524,6 +633,18 @@ async def execute_tools(text: str) -> tuple[str, str, str | None]:
             tool_context = f"\n\n## [AÇÃO EXECUTADA] O código foi gerado e executado na Nuvem E2B.\n\nCódigo Python Executado:\n```python\n{generated_code}\n```\n\nOutput da Máquina Virtual:\n{sandbox_result}\n\nVocê deve encaminhar esse Output da Máquina Virtual (incluindo imagens base64 se houverem) em sua resposta."
         else:
             tool_context = f"\n\n## [ERRO] O CodeAgent falhou em escrever o código Python: {generated_code}"
+
+    elif intent == "mcp" and isinstance(query, dict):
+        server_name = query.get("server_name")
+        tool_name = query.get("tool_name")
+        mcp_args = query.get("args", {})
+        
+        logger.info(f"🔌 Acionando MCP Tool: {server_name}.{tool_name}")
+        # Notificar na interface que estamos acionando a ferramenta ex: [MCP] github.read_file
+        
+        # Chama a tool com o timeout nativo do client
+        result = await mcp_client.call_tool(server_name, tool_name, mcp_args)
+        tool_context = f"\n\n## Resultado da Ferramenta MCP ({server_name}.{tool_name}):\n{result}"
 
     return tool_context, intent, query
 
@@ -716,6 +837,53 @@ async def process_message(text: str, message):
                 "`/cron toggle [nome]`\n"
                 "`/cron remove [nome]`\n"
                 "`/cron run [nome]`"
+            ))
+        return
+
+    # Comandos MCP (Model Context Protocol)
+    elif text_lower.startswith("/mcp"):
+        parts = text.strip().split()
+        cmd = parts[1].lower() if len(parts) > 1 else "status"
+        
+        if cmd == "status":
+            report = await mcp_client.get_status_report()
+            await telegram_bot.send_simple_message(chat_id, report)
+            
+        elif cmd == "add" and len(parts) >= 4:
+            # /mcp add nome url [token]
+            name = parts[2]
+            url = parts[3]
+            token = parts[4] if len(parts) > 4 else None
+            success = await mcp_client.register_server(name, url, token)
+            if success:
+                await telegram_bot.send_simple_message(chat_id, f"✅ Servidor MCP '{name}' registrado com sucesso.\nUse `/mcp status` para testar a conexão.")
+            else:
+                await telegram_bot.send_simple_message(chat_id, f"❌ Erro ao registrar o servidor MCP '{name}'.")
+                
+        elif cmd == "remove" and len(parts) >= 3:
+            name = parts[2]
+            success = await mcp_client.remove_server(name)
+            if success:
+                await telegram_bot.send_simple_message(chat_id, f"🗑️ Servidor MCP '{name}' removido.")
+            else:
+                await telegram_bot.send_simple_message(chat_id, f"❌ Erro ao remover o servidor MCP '{name}'.")
+                
+        elif cmd == "list":
+            servers = await mcp_client.get_all_servers()
+            if not servers:
+                await telegram_bot.send_simple_message(chat_id, "Nenhum servidor vinculado.")
+            else:
+                msg = "📋 **Servidores MCP Configurados:**\n\n"
+                for s in servers:
+                    msg += f"- **{s['name']}** `{s['url']}`\n"
+                await telegram_bot.send_simple_message(chat_id, msg)
+        else:
+            await telegram_bot.send_simple_message(chat_id, (
+                "🔌 **Comandos MCP:**\n"
+                "`/mcp status` - Testa e lista conexões com os tools\n"
+                "`/mcp list` - Apenas lista os endpoints no banco\n"
+                "`/mcp add [nome] [url] [token_opcional]`\n"
+                "`/mcp remove [nome]`"
             ))
         return
 
@@ -1124,6 +1292,20 @@ async def _heartbeat_and_compaction_loop():
     logger.info("🗑️ Heartbeat + Compaction loop iniciado")
     while True:
         try:
+            # Limpeza de uploads antigos (72 horas)
+            import time
+            uploads_path = "uploads"
+            if os.path.exists(uploads_path):
+                now = time.time()
+                for filename in os.listdir(uploads_path):
+                    filepath = os.path.join(uploads_path, filename)
+                    if os.path.isfile(filepath) and now - os.path.getmtime(filepath) > 72 * 3600:
+                        try:
+                            os.remove(filepath)
+                            logger.info(f"🧹 Upload antigo removido: {filename}")
+                        except Exception as delete_error:
+                            logger.debug(f"Erro ao remover {filename}: {delete_error}")
+
             working_memory = await core.get_working_memory()
             if len(working_memory) >= config.MAX_WORKING_MEMORY:
                 logger.info(f"🗑️ Compactando working memory ({len(working_memory)} msgs)...")
@@ -1222,6 +1404,14 @@ async def _memory_consolidation_loop():
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Inicialização
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def send_proactive_message(markdown_text: str):
+    """
+    Função de injenção de mensagens proativas (para o Scheduler Autônomo).
+    Atua como Wrapper assíncrono pro telegram_bot.send_message.
+    """
+    chat_id = config.TELEGRAM_CHAT_ID if hasattr(config, "TELEGRAM_CHAT_ID") else config.USER_ID_ALLOWED
+    await telegram_bot.send_message(chat_id=chat_id, text=markdown_text)
 
 async def main():
     """Inicializa tudo e inicia o bot."""
